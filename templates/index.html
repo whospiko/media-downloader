@@ -1,0 +1,1259 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>YouTube Downloader</title>
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+
+        :root {
+            --bg: #0b1120;
+            --card: #111827;
+            --card-2: #1e293b;
+            --border: #334155;
+            --text: #e2e8f0;
+            --muted: #94a3b8;
+            --dim: #64748b;
+            --primary: #6366f1;
+            --primary-hover: #4f46e5;
+            --success: #16a34a;
+            --danger: #ef4444;
+            --warn: #f59e0b;
+        }
+
+        body {
+            font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+            background: radial-gradient(circle at 20% 0%, #1e1b4b 0%, var(--bg) 45%);
+            color: var(--text);
+            display: flex;
+            justify-content: center;
+            align-items: flex-start;
+            min-height: 100vh;
+            margin: 0;
+            padding: 32px 16px;
+        }
+
+        .card {
+            background: var(--card);
+            padding: 32px;
+            border-radius: 20px;
+            width: 100%;
+            max-width: 780px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, .5),
+                0 0 0 1px rgba(99, 102, 241, .08);
+        }
+
+        .header {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            margin-bottom: 6px;
+        }
+
+        .logo {
+            width: 44px;
+            height: 44px;
+            border-radius: 12px;
+            background: linear-gradient(135deg, #6366f1, #a855f7);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.4rem;
+            box-shadow: 0 8px 24px rgba(99, 102, 241, .35);
+        }
+
+        h1 {
+            margin: 0;
+            font-size: 1.5rem;
+            letter-spacing: -.02em;
+        }
+
+        p.sub {
+            color: var(--muted);
+            margin: 0 0 24px 58px;
+            font-size: .85rem;
+        }
+
+        /* Tabs */
+        .tabs {
+            display: flex;
+            gap: 6px;
+            background: #0f172a;
+            padding: 6px;
+            border-radius: 14px;
+            margin-bottom: 22px;
+            border: 1px solid #1e293b;
+        }
+
+        .tab-btn {
+            flex: 1;
+            padding: 11px;
+            background: transparent;
+            border: none;
+            color: var(--muted);
+            font-size: .92rem;
+            font-weight: 600;
+            border-radius: 10px;
+            cursor: pointer;
+            transition: .2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+        }
+
+        .tab-btn.active {
+            background: linear-gradient(135deg, var(--primary), #7c3aed);
+            color: #fff;
+            box-shadow: 0 4px 14px rgba(99, 102, 241, .35);
+        }
+
+        .tab-btn:hover:not(.active) {
+            background: #1e293b;
+            color: var(--text);
+        }
+
+        .tab-panel {
+            display: none;
+        }
+
+        .tab-panel.active {
+            display: block;
+            animation: fadeIn .25s ease;
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(4px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        label.lbl {
+            display: block;
+            font-size: .85rem;
+            color: var(--muted);
+            margin-bottom: 8px;
+            margin-top: 16px;
+            font-weight: 500;
+        }
+
+        input[type="text"],
+        textarea {
+            width: 100%;
+            padding: 13px 15px;
+            border-radius: 12px;
+            border: 1px solid var(--border);
+            background: #0b1120;
+            color: var(--text);
+            font-size: 1rem;
+            outline: none;
+            font-family: inherit;
+            transition: border-color .15s, box-shadow .15s;
+        }
+
+        input[type="text"]:focus,
+        textarea:focus {
+            border-color: var(--primary);
+            box-shadow: 0 0 0 4px rgba(99, 102, 241, .12);
+        }
+
+        textarea {
+            min-height: 150px;
+            resize: vertical;
+            line-height: 1.55;
+            font-size: .9rem;
+        }
+
+        .row {
+            display: flex;
+            gap: 12px;
+            margin-top: 16px;
+        }
+
+        .segmented {
+            flex: 1;
+            display: flex;
+            gap: 8px;
+        }
+
+        .segmented label {
+            flex: 1;
+            text-align: center;
+            padding: 11px;
+            border: 1px solid var(--border);
+            border-radius: 11px;
+            cursor: pointer;
+            user-select: none;
+            transition: .15s;
+            font-weight: 600;
+            font-size: .9rem;
+        }
+
+        .segmented input {
+            display: none;
+        }
+
+        .segmented label:hover {
+            border-color: var(--primary);
+            background: rgba(99, 102, 241, .06);
+        }
+
+        .segmented label:has(input:checked) {
+            background: var(--primary);
+            border-color: var(--primary);
+            color: #fff;
+            box-shadow: 0 4px 12px rgba(99, 102, 241, .35);
+        }
+
+        button.primary {
+            margin-top: 20px;
+            width: 100%;
+            padding: 13px;
+            border: none;
+            border-radius: 12px;
+            background: linear-gradient(135deg, var(--primary), #7c3aed);
+            color: white;
+            font-size: 1rem;
+            font-weight: 700;
+            cursor: pointer;
+            transition: .15s;
+            box-shadow: 0 6px 18px rgba(99, 102, 241, .3);
+        }
+
+        button.primary:hover:not(:disabled) {
+            transform: translateY(-1px);
+            box-shadow: 0 8px 24px rgba(99, 102, 241, .45);
+        }
+
+        button.primary:disabled {
+            opacity: .55;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        button.save-all {
+            margin-top: 12px;
+            width: 100%;
+            padding: 13px;
+            border: none;
+            border-radius: 12px;
+            background: linear-gradient(135deg, #16a34a, #059669);
+            color: white;
+            font-size: 1rem;
+            font-weight: 700;
+            cursor: pointer;
+            transition: .15s;
+            display: none;
+            box-shadow: 0 6px 18px rgba(22, 163, 74, .3);
+        }
+
+        button.save-all:hover:not(:disabled) {
+            transform: translateY(-1px);
+            box-shadow: 0 8px 24px rgba(22, 163, 74, .45);
+        }
+
+        button.save-all:disabled {
+            opacity: .55;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        button.secondary {
+            background: #334155;
+            margin-top: 8px;
+            font-size: .88rem;
+            padding: 10px;
+            border: none;
+            border-radius: 10px;
+            color: var(--text);
+            cursor: pointer;
+            font-weight: 600;
+            width: 100%;
+            transition: .15s;
+        }
+
+        button.secondary:hover {
+            background: #475569;
+        }
+
+        .status {
+            margin-top: 18px;
+            font-size: .88rem;
+            color: var(--muted);
+            min-height: 20px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .bar {
+            margin-top: 10px;
+            height: 8px;
+            border-radius: 999px;
+            background: var(--border);
+            overflow: hidden;
+            display: none;
+        }
+
+        .bar>div {
+            height: 100%;
+            width: 0%;
+            background: linear-gradient(90deg, #6366f1, #a855f7, #6366f1);
+            background-size: 200% 100%;
+            animation: shimmer 2s linear infinite;
+            transition: width .35s ease;
+        }
+
+        @keyframes shimmer {
+            0% {
+                background-position: 0% 0;
+            }
+
+            100% {
+                background-position: 200% 0;
+            }
+        }
+
+        .error {
+            color: #f87171;
+        }
+
+        a.dl {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            margin-top: 8px;
+            padding: 9px 16px;
+            background: var(--success);
+            color: #fff;
+            text-decoration: none;
+            border-radius: 9px;
+            font-weight: 600;
+            font-size: .85rem;
+            transition: .15s;
+        }
+
+        a.dl:hover {
+            background: #15803d;
+            transform: translateY(-1px);
+        }
+
+        .hint {
+            font-size: .75rem;
+            color: var(--dim);
+            margin-top: 6px;
+        }
+
+        .save-opts {
+            margin-top: 16px;
+            padding: 16px;
+            border-radius: 12px;
+            background: #0b1120;
+            border: 1px solid #1e293b;
+        }
+
+        .save-opts .title {
+            font-size: .85rem;
+            color: var(--muted);
+            margin-bottom: 10px;
+            font-weight: 600;
+        }
+
+        .radio-line {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin: 8px 0;
+            font-size: .88rem;
+            cursor: pointer;
+            padding: 6px 8px;
+            border-radius: 8px;
+            transition: background .15s;
+        }
+
+        .radio-line:hover {
+            background: rgba(99, 102, 241, .07);
+        }
+
+        .radio-line input[type=radio] {
+            accent-color: var(--primary);
+            width: 16px;
+            height: 16px;
+            cursor: pointer;
+        }
+
+        .folder-pick {
+            display: none;
+            margin-top: 10px;
+            padding-left: 34px;
+            animation: fadeIn .2s ease;
+        }
+
+        .folder-pick input[type=text] {
+            font-size: .88rem;
+        }
+
+        /* Quality selector */
+        .quality-row {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-top: 14px;
+            flex-wrap: wrap;
+        }
+
+        .quality-row .qlabel {
+            font-size: .85rem;
+            color: var(--muted);
+            font-weight: 500;
+        }
+
+        .quality-chips {
+            display: flex;
+            gap: 6px;
+            flex-wrap: wrap;
+        }
+
+        .quality-chips label {
+            padding: 7px 14px;
+            border: 1px solid var(--border);
+            border-radius: 999px;
+            cursor: pointer;
+            font-size: .82rem;
+            font-weight: 600;
+            transition: .15s;
+            user-select: none;
+        }
+
+        .quality-chips input {
+            display: none;
+        }
+
+        .quality-chips label:hover {
+            border-color: var(--primary);
+            background: rgba(99, 102, 241, .06);
+        }
+
+        .quality-chips label:has(input:checked) {
+            background: var(--primary);
+            border-color: var(--primary);
+            color: #fff;
+            box-shadow: 0 3px 10px rgba(99, 102, 241, .35);
+        }
+
+        .bulk-list {
+            margin-top: 18px;
+            border: 1px solid var(--border);
+            border-radius: 14px;
+            overflow: hidden;
+            background: #0b1120;
+        }
+
+        .bulk-item {
+            padding: 14px 16px;
+            border-bottom: 1px solid #1e293b;
+            font-size: .85rem;
+            transition: background .15s;
+        }
+
+        .bulk-item:hover {
+            background: rgba(99, 102, 241, .04);
+        }
+
+        .bulk-item:last-child {
+            border-bottom: none;
+        }
+
+        .bulk-item .row1 {
+            display: flex;
+            justify-content: space-between;
+            gap: 12px;
+            align-items: center;
+        }
+
+        .bulk-item .title-cell {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .bulk-item .title-text {
+            color: var(--text);
+            font-weight: 600;
+            font-size: .88rem;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            display: block;
+        }
+
+        .bulk-item .idx {
+            display: inline-block;
+            min-width: 22px;
+            height: 22px;
+            line-height: 22px;
+            text-align: center;
+            background: #1e293b;
+            color: var(--muted);
+            border-radius: 6px;
+            font-size: .72rem;
+            font-weight: 700;
+            margin-right: 8px;
+        }
+
+        .bulk-item .meta {
+            font-size: .72rem;
+            color: var(--dim);
+            margin-top: 3px;
+        }
+
+        .badge {
+            font-size: .68rem;
+            font-weight: 700;
+            padding: 4px 10px;
+            border-radius: 999px;
+            text-transform: uppercase;
+            letter-spacing: .04em;
+            white-space: nowrap;
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+        }
+
+        .badge.queued {
+            background: #1e293b;
+            color: #cbd5e1;
+        }
+
+        .badge.downloading {
+            background: #1e3a8a;
+            color: #93c5fd;
+        }
+
+        .badge.processing {
+            background: #78350f;
+            color: #fcd34d;
+        }
+
+        .badge.done {
+            background: #14532d;
+            color: #86efac;
+        }
+
+        .badge.error {
+            background: #7f1d1d;
+            color: #fca5a5;
+        }
+
+        .pulse {
+            display: inline-block;
+            width: 7px;
+            height: 7px;
+            border-radius: 50%;
+            background: currentColor;
+            animation: pulse 1.2s ease-in-out infinite;
+        }
+
+        @keyframes pulse {
+
+            0%,
+            100% {
+                opacity: 1;
+            }
+
+            50% {
+                opacity: .3;
+            }
+        }
+
+        .bulk-item .progress-line {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-top: 10px;
+        }
+
+        .bulk-item .mini-bar {
+            flex: 1;
+            height: 6px;
+            background: var(--border);
+            border-radius: 999px;
+            overflow: hidden;
+        }
+
+        .bulk-item .mini-bar>div {
+            height: 100%;
+            width: 0%;
+            background: linear-gradient(90deg, #6366f1, #a855f7);
+            transition: width .35s ease;
+        }
+
+        .bulk-item .pct {
+            font-size: .75rem;
+            color: var(--muted);
+            min-width: 44px;
+            text-align: right;
+            font-variant-numeric: tabular-nums;
+            font-weight: 600;
+        }
+
+        .invalid-list {
+            margin-top: 12px;
+            padding: 12px 14px;
+            background: rgba(127, 29, 29, .25);
+            border: 1px solid #7f1d1d;
+            border-radius: 10px;
+            font-size: .8rem;
+            color: #fca5a5;
+        }
+
+        .invalid-list ul {
+            margin: 6px 0 0 16px;
+            padding: 0;
+        }
+
+        .invalid-list li {
+            word-break: break-all;
+        }
+
+        .card-cta {
+            margin-top: 16px;
+            padding: 14px 16px;
+            background: rgba(99, 102, 241, .08);
+            border: 1px solid rgba(99, 102, 241, .25);
+            border-radius: 12px;
+            font-size: .85rem;
+            color: #c7d2fe;
+            display: flex;
+            gap: 10px;
+            align-items: flex-start;
+        }
+
+        .card-cta .ico {
+            font-size: 1.1rem;
+        }
+
+        @media (max-width: 520px) {
+            .card {
+                padding: 22px;
+            }
+
+            h1 {
+                font-size: 1.25rem;
+            }
+
+            p.sub {
+                margin-left: 0;
+            }
+
+            .tab-btn {
+                font-size: .82rem;
+                padding: 10px 6px;
+            }
+
+            .quality-chips label {
+                padding: 6px 10px;
+                font-size: .76rem;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div class="card">
+        <div class="header">
+            <div class="logo">🎵</div>
+            <h1>YouTube Downloader</h1>
+        </div>
+        <p class="sub">High-quality audio &amp; video downloads from YouTube links.</p>
+
+        <div class="tabs">
+            <button class="tab-btn active" data-tab="single">
+                <span>🎯</span> Single
+            </button>
+            <button class="tab-btn" data-tab="bulk">
+                <span>📚</span> Bulk
+            </button>
+        </div>
+
+        <!-- ================= SINGLE TAB ================= -->
+        <div id="tab-single" class="tab-panel active">
+            <label class="lbl">YouTube link</label>
+            <input id="url" type="text" placeholder="https://www.youtube.com/watch?v=..." />
+
+            <div class="row">
+                <div class="segmented">
+                    <label><input type="radio" name="format" value="mp4" checked /><span>📹 MP4</span></label>
+                    <label><input type="radio" name="format" value="mp3" /><span>🎵 MP3</span></label>
+                </div>
+            </div>
+
+            <!-- Audio quality -->
+            <div class="quality-row" id="singleQualityRow">
+                <span class="qlabel">Audio quality:</span>
+                <div class="quality-chips">
+                    <label><input type="radio" name="singleQuality" value="128" /><span>128 kbps</span></label>
+                    <label><input type="radio" name="singleQuality" value="192" /><span>192 kbps</span></label>
+                    <label><input type="radio" name="singleQuality" value="256" /><span>256 kbps</span></label>
+                    <label><input type="radio" name="singleQuality" value="320" checked /><span>320 kbps
+                            ★</span></label>
+                </div>
+            </div>
+
+            <div class="save-opts">
+                <div class="title">💾 Where to save the file?</div>
+                <label class="radio-line">
+                    <input type="radio" name="saveMode" value="browser" checked />
+                    Save to <b>my computer</b> (I'll pick the folder)
+                </label>
+                <label class="radio-line">
+                    <input type="radio" name="saveMode" value="server-default" />
+                    Save to server's default folder
+                </label>
+                <label class="radio-line">
+                    <input type="radio" name="saveMode" value="server-custom" />
+                    Save to a <b>custom folder on the server</b>
+                </label>
+
+                <div id="serverCustomBox" class="folder-pick">
+                    <input id="serverDir" type="text" placeholder="e.g. /home/user/Music  or  D:\Music or ./my_music" />
+                    <div class="hint">Absolute path recommended. Relative paths go under the app folder.</div>
+                </div>
+
+                <div id="serverDefaultBox" class="folder-pick">
+                    <div class="hint">Will be saved in: <code>{{ default_dir }}</code></div>
+                </div>
+            </div>
+
+            <button class="primary" id="go">⬇ Download</button>
+            <div class="status" id="status"></div>
+            <div class="bar" id="bar">
+                <div></div>
+            </div>
+            <div id="result"></div>
+        </div>
+
+        <!-- ================= BULK TAB ================= -->
+        <div id="tab-bulk" class="tab-panel">
+            <label class="lbl">Paste YouTube links (one per line)</label>
+            <textarea id="bulkUrls"
+                placeholder="https://www.youtube.com/watch?v=abc123&#10;https://youtu.be/def456&#10;https://www.youtube.com/watch?v=ghi789"></textarea>
+            <div class="hint" id="bulkCount">0 link(s) detected</div>
+
+            <div class="row">
+                <div class="segmented">
+                    <label><input type="radio" name="bulkFormat" value="mp4" checked /><span>📹 MP4</span></label>
+                    <label><input type="radio" name="bulkFormat" value="mp3" /><span>🎵 MP3</span></label>
+                </div>
+            </div>
+
+            <div class="quality-row" id="bulkQualityRow">
+                <span class="qlabel">Audio quality:</span>
+                <div class="quality-chips">
+                    <label><input type="radio" name="bulkQuality" value="128" /><span>128 kbps</span></label>
+                    <label><input type="radio" name="bulkQuality" value="192" /><span>192 kbps</span></label>
+                    <label><input type="radio" name="bulkQuality" value="256" /><span>256 kbps</span></label>
+                    <label><input type="radio" name="bulkQuality" value="320" checked /><span>320 kbps ★</span></label>
+                </div>
+            </div>
+
+            <div class="save-opts">
+                <div class="title">💾 Where to save the files?</div>
+                <label class="radio-line">
+                    <input type="radio" name="bulkSaveMode" value="browser" checked />
+                    Save each to <b>my computer</b> (click each to download)
+                </label>
+                <label class="radio-line">
+                    <input type="radio" name="bulkSaveMode" value="server-default" />
+                    Save to server's default folder
+                </label>
+                <label class="radio-line">
+                    <input type="radio" name="bulkSaveMode" value="server-custom" />
+                    Save to a <b>custom folder on the server</b>
+                </label>
+
+                <div id="bulkServerCustomBox" class="folder-pick">
+                    <input id="bulkServerDir" type="text"
+                        placeholder="e.g. /home/user/Music  or  D:\Music or ./my_music" />
+                    <div class="hint">All files go into this folder.</div>
+                </div>
+
+                <div id="bulkServerDefaultBox" class="folder-pick">
+                    <div class="hint">Will be saved in: <code>{{ default_dir }}</code></div>
+                </div>
+            </div>
+
+            <button class="primary" id="bulkGo">⬇ Download All</button>
+            <div class="status" id="bulkStatus"></div>
+            <div class="bar" id="bulkBar">
+                <div></div>
+            </div>
+
+            <button class="save-all" id="saveAllBtn">💾 Save All Files</button>
+
+            <div id="bulkResult"></div>
+        </div>
+    </div>
+
+    <script>
+        const $ = id => document.getElementById(id);
+
+        /* ---------- TAB SWITCHING ---------- */
+        document.querySelectorAll(".tab-btn").forEach(btn => {
+            btn.addEventListener("click", () => {
+                document.querySelectorAll(".tab-btn").forEach(b => b.classList.remove("active"));
+                document.querySelectorAll(".tab-panel").forEach(p => p.classList.remove("active"));
+                btn.classList.add("active");
+                $("tab-" + btn.dataset.tab).classList.add("active");
+            });
+        });
+
+        /* ---------- Show/hide quality row based on format ---------- */
+        function toggleQualityRow(formatSelector, rowId) {
+            const fmt = document.querySelector(formatSelector + ':checked').value;
+            $(rowId).style.display = fmt === "mp3" ? "flex" : "none";
+        }
+        document.querySelectorAll('input[name="format"]').forEach(r => {
+            r.addEventListener("change", () => toggleQualityRow('input[name="format"]', "singleQualityRow"));
+        });
+        document.querySelectorAll('input[name="bulkFormat"]').forEach(r => {
+            r.addEventListener("change", () => toggleQualityRow('input[name="bulkFormat"]', "bulkQualityRow"));
+        });
+        // initial state (MP4 default -> hide)
+        toggleQualityRow('input[name="format"]', "singleQualityRow");
+        toggleQualityRow('input[name="bulkFormat"]', "bulkQualityRow");
+
+        /* ================= SINGLE TAB LOGIC ================= */
+        let pollHandle = null;
+        let currentJobId = null;
+        let currentSaveMode = "browser";
+        let currentTitle = "media";
+        let currentExt = "mp4";
+
+        document.querySelectorAll('input[name="saveMode"]').forEach(r => {
+            r.addEventListener("change", () => {
+                currentSaveMode = r.value;
+                $("serverCustomBox").style.display = r.value === "server-custom" ? "block" : "none";
+                $("serverDefaultBox").style.display = r.value === "server-default" ? "block" : "none";
+            });
+        });
+
+        document.querySelectorAll('input[name="format"]').forEach(r => {
+            r.addEventListener("change", () => { currentExt = r.value; });
+        });
+
+        $("go").addEventListener("click", async () => {
+            const url = $("url").value.trim();
+            const format = document.querySelector('input[name="format"]:checked').value;
+            const quality = document.querySelector('input[name="singleQuality"]:checked').value;
+            const saveMode = document.querySelector('input[name="saveMode"]:checked').value;
+            const serverDir = saveMode === "server-custom" ? $("serverDir").value.trim() : "";
+
+            $("result").innerHTML = "";
+            $("status").textContent = "";
+            $("bar").style.display = "none";
+            $("go").disabled = true;
+            currentExt = format;
+
+            if (!url) {
+                showError("Please paste a YouTube link.");
+                $("go").disabled = false;
+                return;
+            }
+            if (saveMode === "server-custom" && !serverDir) {
+                showError("Please enter a server folder path, or choose another option.");
+                $("go").disabled = false;
+                return;
+            }
+
+            try {
+                const res = await fetch("/api/download", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        url, format, quality,
+                        server_dir: saveMode === "server-custom" ? serverDir : "",
+                    })
+                });
+                const data = await res.json();
+
+                if (!res.ok) {
+                    showError(data.error || "Failed to start download.");
+                    $("go").disabled = false;
+                    return;
+                }
+
+                currentJobId = data.job_id;
+                currentSaveMode = saveMode;
+
+                if (saveMode === "server-custom" || saveMode === "server-default") {
+                    $("status").textContent = `📁 Saving on server to: ${data.saved_to}`;
+                } else {
+                    $("status").textContent = "⏳ Starting download...";
+                }
+                $("bar").style.display = "block";
+                poll(data.job_id);
+            } catch (e) {
+                showError("Network error: " + e.message);
+                $("go").disabled = false;
+            }
+        });
+
+        function poll(jobId) {
+            clearInterval(pollHandle);
+            pollHandle = setInterval(async () => {
+                try {
+                    const res = await fetch(`/api/status/${jobId}`);
+                    const job = await res.json();
+
+                    if (job.status === "downloading") {
+                        const speedTxt = job.speed
+                            ? ` · ${(job.speed / 1024 / 1024).toFixed(2)} MB/s`
+                            : "";
+                        const etaTxt = job.eta ? ` · ETA ${job.eta}s` : "";
+                        $("status").textContent =
+                            `⬇ Downloading… ${job.percent}%${speedTxt}${etaTxt}`;
+                        $("bar").firstElementChild.style.width = job.percent + "%";
+                    } else if (job.status === "processing") {
+                        $("status").textContent = "⚙️ Converting / merging…";
+                        $("bar").firstElementChild.style.width = "100%";
+                    } else if (job.status === "done") {
+                        clearInterval(pollHandle);
+                        currentTitle = job.title || "media";
+
+                        if (currentSaveMode === "browser") {
+                            $("status").textContent = "✅ Ready! Click below to save it on your computer.";
+                            $("result").innerHTML =
+                                `<a class="dl" href="/api/file/${jobId}">⬇ Save "${escapeHtml(currentTitle)}"</a>
+                                 <button class="secondary" id="pickFolder">📁 Or pick a folder &amp; save now</button>
+                                 <div class="hint" id="pickHint"></div>`;
+                            setupFolderPicker(jobId);
+                        } else {
+                            $("status").textContent = `✅ Saved on server at: ${job.saved_to}`;
+                            $("result").innerHTML =
+                                `<div class="hint">File: <code>${escapeHtml(job.filename)}</code></div>`;
+                        }
+                        $("go").disabled = false;
+                    } else if (job.status === "error") {
+                        clearInterval(pollHandle);
+                        showError("Error: " + job.error);
+                        $("go").disabled = false;
+                    }
+                } catch (e) {
+                    clearInterval(pollHandle);
+                    showError("Lost connection to server.");
+                    $("go").disabled = false;
+                }
+            }, 1000);
+        }
+
+        function setupFolderPicker(jobId) {
+            const btn = $("pickFolder");
+            if (!btn) return;
+            if (!window.showDirectoryPicker) {
+                btn.disabled = true;
+                $("pickHint").textContent = "Your browser doesn't support folder picking. Use the save button above.";
+                return;
+            }
+            btn.addEventListener("click", async () => {
+                try {
+                    const dirHandle = await window.showDirectoryPicker({ mode: "readwrite" });
+                    $("pickHint").textContent = "Fetching file...";
+                    const res = await fetch(`/api/file/${jobId}`);
+                    const blob = await res.blob();
+                    const safeName = (currentTitle || "media")
+                        .replace(/[^\w\-. ]+/g, "_").slice(0, 80) + "." + currentExt;
+                    const fileHandle = await dirHandle.getFileHandle(safeName, { create: true });
+                    const writable = await fileHandle.createWritable();
+                    await writable.write(blob);
+                    await writable.close();
+                    $("pickHint").textContent = `✅ Saved "${safeName}" to your chosen folder.`;
+                } catch (e) {
+                    $("pickHint").textContent = "Cancelled or failed: " + e.message;
+                }
+            });
+        }
+
+        function showError(msg) {
+            $("status").innerHTML = `<span class="error">${escapeHtml(msg)}</span>`;
+            $("bar").style.display = "none";
+        }
+        function escapeHtml(s) {
+            return String(s).replace(/[&<>"']/g, c => ({
+                "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
+            }[c]));
+        }
+
+        /* ================= BULK TAB LOGIC ================= */
+        let bulkPollHandle = null;
+        let bulkSaveMode = "browser";
+        let lastBulkItems = [];
+        let lastBulkExt = "mp4";
+
+        const bulkUrlsEl = $("bulkUrls");
+        const bulkCountEl = $("bulkCount");
+
+        function updateBulkCount() {
+            const lines = bulkUrlsEl.value
+                .split("\n")
+                .map(l => l.trim())
+                .filter(Boolean);
+            bulkCountEl.textContent = `${lines.length} link(s) detected`;
+        }
+        bulkUrlsEl.addEventListener("input", updateBulkCount);
+        updateBulkCount();
+
+        document.querySelectorAll('input[name="bulkSaveMode"]').forEach(r => {
+            r.addEventListener("change", () => {
+                bulkSaveMode = r.value;
+                $("bulkServerCustomBox").style.display = r.value === "server-custom" ? "block" : "none";
+                $("bulkServerDefaultBox").style.display = r.value === "server-default" ? "block" : "none";
+            });
+        });
+
+        document.querySelectorAll('input[name="bulkFormat"]').forEach(r => {
+            r.addEventListener("change", () => {
+                lastBulkExt = document.querySelector('input[name="bulkFormat"]:checked').value;
+            });
+        });
+
+        $("bulkGo").addEventListener("click", async () => {
+            const urls = bulkUrlsEl.value.trim();
+            const format = document.querySelector('input[name="bulkFormat"]:checked').value;
+            const quality = document.querySelector('input[name="bulkQuality"]:checked').value;
+            const saveMode = document.querySelector('input[name="bulkSaveMode"]:checked').value;
+            const serverDir = saveMode === "server-custom" ? $("bulkServerDir").value.trim() : "";
+
+            $("bulkResult").innerHTML = "";
+            $("bulkStatus").textContent = "";
+            $("bulkBar").style.display = "none";
+            $("saveAllBtn").style.display = "none";
+
+            if (!urls) {
+                bulkShowError("Please paste at least one link.");
+                return;
+            }
+            if (saveMode === "server-custom" && !serverDir) {
+                bulkShowError("Please enter a server folder path, or choose another option.");
+                return;
+            }
+
+            $("bulkGo").disabled = true;
+            lastBulkExt = format;
+
+            try {
+                const res = await fetch("/api/bulk-download", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        urls, format, quality,
+                        server_dir: saveMode === "server-custom" ? serverDir : "",
+                    })
+                });
+                const data = await res.json();
+
+                if (!res.ok) {
+                    bulkShowError(data.error || "Failed to start bulk download.");
+                    $("bulkGo").disabled = false;
+                    return;
+                }
+
+                if (data.invalid && data.invalid.length) {
+                    const list = data.invalid.map(u => `<li>${escapeHtml(u)}</li>`).join("");
+                    $("bulkResult").innerHTML =
+                        `<div class="invalid-list">⚠️ Skipped ${data.invalid.length} invalid link(s):<ul>${list}</ul></div>`;
+                }
+
+                $("bulkStatus").textContent =
+                    `📥 Queued ${data.total} download(s) → ${data.saved_to}`;
+                $("bulkBar").style.display = "block";
+                bulkPoll(data.bulk_id, saveMode);
+            } catch (e) {
+                bulkShowError("Network error: " + e.message);
+                $("bulkGo").disabled = false;
+            }
+        });
+
+        function bulkPoll(bulkId, saveMode) {
+            clearInterval(bulkPollHandle);
+            bulkPollHandle = setInterval(async () => {
+                try {
+                    const res = await fetch(`/api/bulk-status/${bulkId}`);
+                    const data = await res.json();
+
+                    $("bulkBar").firstElementChild.style.width = data.overall_percent + "%";
+                    $("bulkStatus").textContent =
+                        `📊 ${data.done + data.errors}/${data.total} finished ` +
+                        `(${data.overall_percent}%)` +
+                        (data.errors ? ` · ${data.errors} error(s)` : "");
+
+                    lastBulkItems = data.items;
+                    renderBulkItems(data.items, saveMode);
+                    updateSaveAllButton(data.items, saveMode);
+
+                    if (data.done + data.errors >= data.total) {
+                        clearInterval(bulkPollHandle);
+                        $("bulkGo").disabled = false;
+                    }
+                } catch (e) {
+                    clearInterval(bulkPollHandle);
+                    bulkShowError("Lost connection to server.");
+                    $("bulkGo").disabled = false;
+                }
+            }, 1000);
+        }
+
+        function updateSaveAllButton(items, saveMode) {
+            const btn = $("saveAllBtn");
+            const done = items.filter(it => it.status === "done");
+
+            if (saveMode !== "browser" || done.length === 0) {
+                btn.style.display = "none";
+                return;
+            }
+
+            btn.style.display = "block";
+            btn.textContent = `💾 Save All ${done.length} File${done.length > 1 ? "s" : ""}`;
+        }
+
+        $("saveAllBtn").addEventListener("click", async () => {
+            const done = lastBulkItems.filter(it => it.status === "done");
+            if (done.length === 0) return;
+
+            const btn = $("saveAllBtn");
+            const originalText = btn.textContent;
+            btn.disabled = true;
+
+            if (window.showDirectoryPicker) {
+                try {
+                    const dirHandle = await window.showDirectoryPicker({ mode: "readwrite" });
+                    let saved = 0;
+
+                    for (let i = 0; i < done.length; i++) {
+                        const it = done[i];
+                        btn.textContent = `Saving ${i + 1}/${done.length}...`;
+
+                        try {
+                            const res = await fetch(`/api/file/${it.job_id}`);
+                            const blob = await res.blob();
+
+                            const rawTitle = it.title || `video_${i + 1}`;
+                            const safeName = rawTitle
+                                .replace(/[^\w\-. ]+/g, "_")
+                                .slice(0, 80) + "." + lastBulkExt;
+
+                            const fileHandle = await dirHandle.getFileHandle(safeName, { create: true });
+                            const writable = await fileHandle.createWritable();
+                            await writable.write(blob);
+                            await writable.close();
+                            saved++;
+                        } catch (err) {
+                            console.error("Failed to save", it.title, err);
+                        }
+                    }
+
+                    btn.textContent = `✅ Saved ${saved}/${done.length} files`;
+                    setTimeout(() => {
+                        btn.textContent = originalText;
+                        btn.disabled = false;
+                    }, 2500);
+                    return;
+                } catch (e) {
+                    console.warn("Folder picker cancelled or failed:", e);
+                }
+            }
+
+            btn.textContent = `Downloading ${done.length} files...`;
+            for (let i = 0; i < done.length; i++) {
+                const it = done[i];
+                const a = document.createElement("a");
+                a.href = `/api/file/${it.job_id}`;
+                a.download = "";
+                document.body.appendChild(a);
+                a.click();
+                a.remove();
+                await new Promise(r => setTimeout(r, 600));
+            }
+
+            btn.textContent = `✅ Triggered ${done.length} downloads`;
+            setTimeout(() => {
+                btn.textContent = originalText;
+                btn.disabled = false;
+            }, 2500);
+        });
+
+        function renderBulkItems(items, saveMode) {
+            const html = items.map((it, idx) => {
+                const pct = it.status === "done" ? 100 : (it.percent || 0);
+                const rawTitle = it.title || it.url || "(unknown)";
+                const titleHtml = escapeHtml(
+                    rawTitle.length > 70 ? rawTitle.slice(0, 70) + "…" : rawTitle
+                );
+
+                let badgeContent = it.status;
+                if (it.status === "downloading") {
+                    badgeContent = `<span class="pulse"></span>${it.status}`;
+                } else if (it.status === "processing") {
+                    badgeContent = `<span class="pulse"></span>${it.status}`;
+                } else if (it.status === "done") {
+                    badgeContent = `✓ ${it.status}`;
+                } else if (it.status === "error") {
+                    badgeContent = `✕ ${it.status}`;
+                }
+
+                const speedTxt = (it.status === "downloading" && it.speed)
+                    ? ` · ${(it.speed / 1024 / 1024).toFixed(2)} MB/s`
+                    : "";
+                const uploaderTxt = it.uploader ? ` · ${escapeHtml(it.uploader)}` : "";
+                const metaHtml = `<div class="meta">${pct}%${speedTxt}${uploaderTxt}</div>`;
+
+                let actionHtml = "";
+                if (it.status === "done") {
+                    if (saveMode === "browser") {
+                        actionHtml = `<a class="dl" href="/api/file/${it.job_id}">⬇ Save</a>`;
+                    } else {
+                        actionHtml = `<span class="hint">saved: <code>${escapeHtml(it.filename || "")}</code></span>`;
+                    }
+                } else if (it.status === "error") {
+                    actionHtml = `<span class="error" style="font-size:.75rem">${escapeHtml(it.error || "error")}</span>`;
+                }
+
+                return `
+                    <div class="bulk-item">
+                        <div class="row1">
+                            <div class="title-cell">
+                                <span class="title-text">
+                                    <span class="idx">${idx + 1}</span>${titleHtml}
+                                </span>
+                            </div>
+                            <span class="badge ${it.status}">${badgeContent}</span>
+                        </div>
+                        <div class="progress-line">
+                            <div class="mini-bar"><div style="width:${pct}%"></div></div>
+                            <span class="pct">${pct}%</span>
+                        </div>
+                        ${metaHtml}
+                        ${actionHtml ? `<div style="margin-top:8px">${actionHtml}</div>` : ""}
+                    </div>`;
+            }).join("");
+
+            $("bulkResult").innerHTML = `<div class="bulk-list">${html}</div>`;
+        }
+
+        function bulkShowError(msg) {
+            $("bulkStatus").innerHTML = `<span class="error">${escapeHtml(msg)}</span>`;
+            $("bulkBar").style.display = "none";
+        }
+    </script>
+</body>
+
+</html>
