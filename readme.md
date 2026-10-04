@@ -1,6 +1,6 @@
 # 🎵 YouTube Downloader
 
-> A modern, self-hosted web app to download YouTube videos as **MP4** or **high-quality MP3 (up to 320 kbps)** — with batch support, folder picking, and a clean dark UI.
+> A modern, self-hosted web app to download YouTube videos as **MP4** or **high-quality MP3 (up to 320 kbps)** — with Single, Bulk, and Playlist modes, folder picking, and a clean dark UI.
 
 ![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?logo=python&logoColor=white)
 ![Flask](https://img.shields.io/badge/Flask-3.0-000000?logo=flask&logoColor=white)
@@ -17,6 +17,9 @@
 - [Quick Start](#-quick-start)
 - [Project Structure](#-project-structure)
 - [Usage](#-usage)
+  - [Single Download](#single-download)
+  - [Bulk Download](#bulk-download)
+  - [Playlist Download](#playlist-download)
 - [Access from Your Phone (LAN)](#-access-from-your-phone-lan)
 - [Configuration](#-configuration)
 - [Troubleshooting](#-troubleshooting)
@@ -31,25 +34,40 @@
 
 ## ✨ Features
 
-### Core
-- 🎯 **Single Download** — paste one YouTube link, pick MP4 or MP3
-- 📚 **Bulk Download** — paste many links (one per line), download them all at once
-- 🔊 **High-Quality Audio** — choose 128 / 192 / 256 / **320 kbps** MP3
-- 🖼️ **Auto Cover Art** — thumbnails + metadata (title/artist) embedded into every MP3
+### 🎯 Three Download Modes
+- **Single** — paste one YouTube link, download instantly
+- **Bulk** — paste many links (one per line), each queued as its own job
+- **Playlist** — paste a YouTube playlist URL and grab every video in it
 
-### Save Options
-- 💾 **Flexible Save Options**
-  - Save to **your computer** (browser download, or Chrome/Edge folder picker)
-  - Save to the **server's default folder**
-  - Save to a **custom folder** on the server
-- 💚 **Save All** button — grab every finished file from a bulk job in one click
+### 🔊 Audio Quality
+- Choose **128 / 192 / 256 / 320 kbps** MP3
+- Automatically picks the **highest-bitrate source** YouTube offers
+- **Cover art + metadata** (title, artist) embedded into every MP3
+- Matches Spotify Premium's "Very High" tier output bitrate
 
-### Experience
-- 📊 **Live Progress** — real-time percent, speed, ETA, and per-item status
-- 🎨 **Modern Dark UI** — responsive, mobile-friendly, animated progress bars
-- ⚡ **Smart Concurrency** — throttled to 2 parallel downloads to avoid YouTube CDN timeouts
-- 🔁 **Auto Retries** — resilient to slow networks and CDN hiccups
-- 📱 **LAN Access** — use it from your phone on the same Wi-Fi
+### 💾 Flexible Save Options
+- **My computer** — browser download, or pick a folder directly via Chrome/Edge File System Access API
+- **Server's default folder** — `./downloads/` next to `app.py`
+- **Custom folder on server** — any absolute or relative path
+- **💚 Save All** button — one click, one folder picker, all files saved (Chrome/Edge); sequential fallback for Firefox
+
+### 📊 Real-Time Feedback
+- Live percent, speed (MB/s), ETA for active downloads
+- Per-item status badges: `queued` · `downloading` · `processing` · `done` · `error`
+- Animated shimmer progress bars, pulsing indicators on active items
+- Overall bulk/playlist progress bar
+
+### 🛡 Reliability
+- **Smart concurrency** — max 2 simultaneous downloads to avoid YouTube CDN throttling
+- **Auto-retry** — 10 retries per HTTP request & per fragment, with exponential backoff
+- **Resumable downloads** — 1 MiB chunks so a dropped connection resumes, not restarts
+- **IPv4 forced** — fixes common `googlevideo.com` timeouts on Windows
+
+### 🎨 Experience
+- Modern dark UI with gradient accents
+- Fully responsive — works great on mobile
+- **LAN access** — use it from your phone over Wi-Fi
+- No build step, no frontend dependencies — just vanilla JS + CSS
 
 ---
 
@@ -57,9 +75,9 @@
 
 > _Add your screenshots to a `docs/` folder and update the paths below. If you don't want screenshots, delete this section._
 
-| Single Tab | Bulk Tab |
-| :-: | :-: |
-| ![Single Tab](docs/single.png) | ![Bulk Tab](docs/bulk.png) |
+| Single Tab | Bulk Tab | Playlist Tab |
+| :-: | :-: | :-: |
+| ![Single Tab](docs/single.png) | ![Bulk Tab](docs/bulk.png) | ![Playlist Tab](docs/playlist.png) |
 
 | Mobile View |
 | :-: |
@@ -144,11 +162,12 @@ youtube-downloader/
 ├── app.py                  # Flask backend + yt-dlp logic
 ├── requirements.txt        # Python dependencies
 ├── templates/
-│   └── index.html          # Single-page UI (Single + Bulk tabs)
+│   └── index.html          # Single-page UI (Single + Bulk + Playlist tabs)
 ├── downloads/              # Default output folder (auto-created on first run)
 ├── docs/                   # Screenshots for README (optional)
 │   ├── single.png
 │   ├── bulk.png
+│   ├── playlist.png
 │   └── mobile.png
 └── README.md
 ```
@@ -160,12 +179,12 @@ youtube-downloader/
 ### Single Download
 
 1. Open the **Single** tab.
-2. Paste a YouTube URL into the input field.
+2. Paste a YouTube URL.
 3. Pick **MP4** (video) or **MP3** (audio only).
 4. If **MP3**, pick a bitrate — default **320 kbps** is best.
-5. Choose where to save the file:
-   - **Save to my computer** — browser will download it (you can also click "📁 pick a folder" in Chrome/Edge to choose a destination directly)
-   - **Server's default folder** — saves to `./downloads/` on the machine running the app
+5. Choose where to save:
+   - **Save to my computer** — browser downloads it (or pick a folder directly in Chrome/Edge)
+   - **Server's default folder** — saves to `./downloads/`
    - **Custom folder on the server** — type a path like `D:\Music` or `/home/user/Music`
 6. Click **⬇ Download**.
 7. Watch the progress bar; when done, click **Save** or use the folder picker.
@@ -175,17 +194,35 @@ youtube-downloader/
 1. Open the **Bulk** tab.
 2. Paste YouTube links, **one per line**.
    - Duplicates are removed automatically.
-   - Invalid links are shown in a red warning box and skipped.
-3. Pick format and quality (same as Single).
-4. Choose save location (same as Single).
+   - Invalid links show in a red warning box and are skipped.
+3. Pick format and quality.
+4. Choose save location.
 5. Click **⬇ Download All**.
-6. Each link gets its own progress card with status badge:
-   - `queued` → waiting for a free slot
-   - `downloading` → active (with live speed)
-   - `processing` → FFmpeg converting/merging
-   - `done` → ready to save
-   - `error` → something failed
-7. When items finish, click **💾 Save All N Files** — the folder picker saves everything into one folder at once (Chrome/Edge), or triggers sequential downloads (Firefox).
+6. Each link gets its own progress card with a status badge.
+7. When items finish, click **💾 Save All N Files**:
+   - **Chrome/Edge** — pick one folder, all files save silently
+   - **Firefox** — browser triggers sequential downloads (accept the "multiple downloads" prompt once)
+
+### Playlist Download
+
+1. Open the **Playlist** tab.
+2. Paste a YouTube playlist URL:
+   - `https://www.youtube.com/playlist?list=PLxxxx`
+   - Or any watch URL that contains `&list=PLxxxx`
+3. Pick format and quality.
+4. **Optional: Max videos** — cap the download (All / 5 / 10 / 25 / 50). Useful for huge playlists.
+5. Choose save location.
+6. Click **⬇ Download Playlist**.
+7. The app:
+   - Reads the playlist metadata (fast — no per-video resolution yet)
+   - Queues every video as its own job (goes through the same 2-at-a-time limit)
+   - Shows one progress card per video
+8. When items finish, click **💾 Save All N Files**.
+
+**Notes:**
+- Private playlists require cookies (see [Troubleshooting](#-troubleshooting)).
+- The playlist title appears in the status line.
+- Each video is downloaded individually — you can retry only the failed ones by re-pasting the specific video URLs in the Bulk tab.
 
 ---
 
@@ -278,7 +315,7 @@ Downloads are throttled to avoid YouTube CDN timeouts. Edit `app.py`:
 DOWNLOAD_SEMAPHORE = threading.Semaphore(2)   # change 2 to N
 ```
 
-Higher values = faster bulk jobs, but more chance of hitting CDN errors.
+Higher values = faster bulk/playlist jobs, but more chance of hitting CDN errors.
 
 ### Change default download folder
 
@@ -296,9 +333,11 @@ DEFAULT_DOWNLOAD_DIR = BASE_DIR / "downloads"   # change to any path
 | **`ffmpeg is not installed`** | Install FFmpeg and restart terminal |
 | **`No supported JavaScript runtime`** | Install Deno and restart terminal |
 | **`Please sign in` / `Precondition check failed`** | Update yt-dlp: `pip install -U yt-dlp` |
-| **`Connection to googlevideo.com timed out`** | The app auto-retries 10×; if persistent, disable VPN or antivirus HTTPS scanning |
+| **`Connection to googlevideo.com timed out`** | Auto-retries 10×; if persistent, disable VPN or antivirus HTTPS scanning |
 | **Phone can't reach the app** | Windows Firewall — see [LAN section](#-access-from-your-phone-lan) |
 | **Audio sounds same at all bitrates** | YouTube's source is often only 128–256 kbps; higher output preserves that better but can't add detail |
+| **Playlist says "Could not read playlist"** | Private/age-restricted playlist → add cookies (below) |
+| **Playlist downloads only some videos** | Some videos may be region-locked or deleted; the rest still succeed |
 | **`Unable to download API page`** | Update yt-dlp: `pip install -U yt-dlp` |
 
 ### Keep yt-dlp updated
@@ -311,7 +350,7 @@ pip install -U yt-dlp
 
 The `requirements.txt` intentionally does **not** pin yt-dlp — this ensures `pip install -r requirements.txt` always grabs a working version.
 
-### Adding cookies (for age-restricted or sign-in-required videos)
+### Adding cookies (for age-restricted, private, or sign-in-required content)
 
 **Option A — live browser cookies:**
 
@@ -333,6 +372,8 @@ In `app.py`, add to `common_opts` inside `download_worker`:
 "cookiefile": "cookies.txt",
 ```
 
+You'll also want to add the same cookie option to the **playlist extraction** block in `start_playlist_download` (the `extract_opts` dict) for private playlists.
+
 > ⚠️ Never commit `cookies.txt` — it contains session credentials.
 
 ---
@@ -341,9 +382,9 @@ In `app.py`, add to `common_opts` inside `download_worker`:
 
 - **[Flask](https://flask.palletsprojects.com/)** — lightweight web framework
 - **[yt-dlp](https://github.com/yt-dlp/yt-dlp)** — the actual download engine
-- **[FFmpeg](https://ffmpeg.org/)** — audio extraction & A/V merging
+- **[FFmpeg](https://ffmpeg.org/)** — audio extraction, A/V merging, metadata embedding
 - **[Deno](https://deno.land/)** — JavaScript runtime for YouTube challenge solving
-- **Vanilla JS + CSS** — no build step, no dependencies
+- **Vanilla JS + CSS** — no build step, no frontend dependencies
 
 ---
 
@@ -385,7 +426,7 @@ Port 5000 is often reserved by Windows (Hyper-V/WSL2) or macOS (AirPlay Receiver
 Not from the UI yet. yt-dlp names files with an internal job ID; the friendly name is applied when you click **Save**. PRs welcome!
 
 **Q: Does it work with YouTube playlists?**
-Not currently — `noplaylist` is enabled so only the single video from a playlist URL is downloaded. Removing that flag would enable playlist support.
+Yes — the **Playlist** tab handles both `youtube.com/playlist?list=...` and watch URLs with `&list=...`. You can also cap how many videos to grab.
 
 **Q: How many links can I paste in Bulk?**
 No hard limit, but the queue downloads 2 at a time. Pasting 100+ links works but will take a while.
@@ -395,6 +436,9 @@ No. Files stay in `downloads/` on the server. Add a cleanup task (e.g., cron job
 
 **Q: Can I use this on Windows, macOS, and Linux?**
 Yes — the only platform-specific bits are the FFmpeg/Deno install steps, which the docs cover for all three.
+
+**Q: How do I add a "Save All" for my playlist downloads?**
+The Playlist tab already has **💾 Save All** — it works exactly like the Bulk tab's version.
 
 ---
 
@@ -411,12 +455,15 @@ Contributions, issues, and feature requests are welcome!
 Please test with a **public-domain** YouTube video before submitting.
 
 ### Ideas for contributions
-- Playlist support
+- ✅ ~~Playlist support~~ (done!)
+- Drag-and-drop URL paste
 - Progress persistence (resume jobs after server restart)
 - Auto-cleanup of old downloads
 - Docker image
 - User authentication for public deployments
 - Dark/light theme toggle
+- Subtitle / chapter download
+- Direct download (skip "Save" click for browser mode)
 
 ---
 
@@ -427,7 +474,7 @@ This project is licensed under the **MIT License** — see the [LICENSE](LICENSE
 ```
 MIT License
 
-Copyright (c) 2026 YOUR NAME
+Copyright (c) 2026 whospiko
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -448,7 +495,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-> Replace `YOUR NAME` with your name or GitHub handle.
+> Replace `whospiko` if you prefer a different author name.
 
 ---
 

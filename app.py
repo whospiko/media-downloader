@@ -25,12 +25,29 @@ YT_REGEX = re.compile(
     r"[\w\-]+"
 )
 
+# NEW: Playlist URLs look like youtube.com/playlist?list=XXXX
+PLAYLIST_REGEX = re.compile(
+    r"^(https?://)?(www\.)?"
+    r"(youtube\.com/playlist\?list=|"
+    r"youtube\.com/.*[?&]list=|"
+    r"music\.youtube\.com/playlist\?list=)"
+    r"[\w\-]+"
+)
+
 # Valid audio quality targets (kbps)
 VALID_QUALITIES = {"128", "192", "256", "320"}
 
 
 def is_valid_youtube_url(url: str) -> bool:
     return bool(url and YT_REGEX.match(url.strip()))
+
+
+def is_valid_playlist_url(url: str) -> bool:
+    """Accept both /playlist?list= and watch URLs that contain &list=."""
+    if not url:
+        return False
+    u = url.strip()
+    return bool(PLAYLIST_REGEX.match(u)) or ("list=" in u and "youtube.com" in u)
 
 
 def resolve_output_dir(user_path: str | None) -> Path:
@@ -85,7 +102,6 @@ def download_worker(job_id: str, url: str, fmt: str, output_dir: Path,
                 "quiet": True,
                 "noplaylist": True,
 
-                # Retry & timeout — fixes googlevideo CDN timeouts
                 "retries": 10,
                 "fragment_retries": 10,
                 "file_access_retries": 5,
@@ -104,34 +120,22 @@ def download_worker(job_id: str, url: str, fmt: str, output_dir: Path,
             }
 
             if fmt == "mp3":
-                # Quality: pass target as preferredquality.
-                # yt-dlp picks the best available audio source, then transcodes.
-                # Note: If the source is only 128k AAC, you can't invent more bits —
-                # but we always ask for the best source first.
                 ydl_opts = {
                     **common_opts,
                     "format": "bestaudio/best",
                     "postprocessors": [
-                        # First: extract audio using best available source
                         {
                             "key": "FFmpegExtractAudio",
                             "preferredcodec": "mp3",
                             "preferredquality": quality,
                         },
-                        # Second: ensure embedded metadata (title/artist)
                         {"key": "FFmpegMetadata", "add_metadata": True},
-                        # Third: attach thumbnail as cover art
                         {"key": "EmbedThumbnail", "already_have_thumbnail": False},
                     ],
                     "writethumbnail": True,
-                    # Prefer m4a/webm audio sources with highest ABR
-                    "format_sort": [
-                        "abr",       # highest audio bitrate first
-                        "asr",       # then sample rate
-                        "channels",  # then channel count
-                    ],
+                    "format_sort": ["abr", "asr", "channels"],
                 }
-            else:  # mp4
+            else:
                 ydl_opts = {
                     **common_opts,
                     "format": "bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best",
@@ -290,6 +294,115 @@ def start_bulk_download():
     })
 
 
+# ============ PLAYLIST DOWNLOAD (NEW) ============
+@app.route("/api/playlist-download", methods=["POST"])
+def start_playlist_download():
+    data = request.get_json(silent=True) or {}
+    url = (data.get("url") or "").strip()
+    fmt = (data.get("format") or "mp4").lower()
+    quality = str(data.get("quality") or "320")
+    server_dir = (data.get("server_dir") or "").strip()
+    max_items = data.get("max_items")  # optional cap
+
+    if not is_valid_playlist_url(url):
+        return jsonify({"error": "Invalid YouTube playlist URL."}), 400
+    if fmt not in ("mp3", "mp4"):
+        return jsonify({"error": "Format must be mp3 or mp4."}), 400
+    if quality not in VALID_QUALITIES:
+        quality = "320"
+
+    try:
+        output_dir = resolve_output_dir(server_dir)
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
+
+    # ---- Expand the playlist into individual video URLs (no download yet) ----
+    extract_opts = {
+        "quiet": True,
+        "extract_flat": "in_playlist",   # fast — don't resolve each video
+        "skip_download": True,
+        "ignoreerrors": True,
+        "socket_timeout": 30,
+        "retries": 5,
+        "noplaylist": False,             # ← IMPORTANT: we WANT the playlist
+    }
+
+    try:
+        with yt_dlp.YoutubeDL(extract_opts) as ydl:
+            info = ydl.extract_info(url, download=False)
+    except Exception as e:
+        return jsonify({"error": f"Could not read playlist: {e}"}), 400
+
+    if not info:
+        return jsonify({"error": "Playlist info could not be fetched."}), 400
+
+    entries = info.get("entries") or []
+    playlist_title = info.get("title") or "Playlist"
+
+    # Optional cap
+    if max_items:
+        try:
+            max_items = int(max_items)
+            entries = entries[:max_items]
+        except (TypeError, ValueError):
+            pass
+
+    if not entries:
+        return jsonify({"error": "Playlist is empty."}), 400
+
+    # Build clean list of {url, title}
+    video_items = []
+    for e in entries:
+        if not e:
+            continue
+        vid = e.get("id")
+        vurl = e.get("url") or (f"https://www.youtube.com/watch?v={vid}" if vid else None)
+        if vurl:
+            video_items.append({
+                "url": vurl,
+                "title": e.get("title") or vid or "video",
+            })
+
+    if not video_items:
+        return jsonify({"error": "No usable videos found in playlist."}), 400
+
+    # ---- Queue a job for each video ----
+    bulk_id = uuid.uuid4().hex
+    job_ids = []
+    for item in video_items:
+        jid = uuid.uuid4().hex
+        JOBS[jid] = {
+            "status": "queued",
+            "percent": 0,
+            "saved_to": str(output_dir),
+            "url": item["url"],
+            "title": item["title"],   # pre-fill title from playlist metadata
+            "error": None,
+        }
+        job_ids.append(jid)
+        threading.Thread(
+            target=download_worker,
+            args=(jid, item["url"], fmt, output_dir, quality),
+            daemon=True,
+        ).start()
+
+    BULK_JOBS[bulk_id] = {
+        "job_ids": job_ids,
+        "total": len(job_ids),
+        "invalid": [],
+        "saved_to": str(output_dir),
+        "playlist_title": playlist_title,
+    }
+
+    return jsonify({
+        "bulk_id": bulk_id,
+        "job_ids": job_ids,
+        "total": len(job_ids),
+        "playlist_title": playlist_title,
+        "saved_to": str(output_dir),
+    })
+
+
 @app.route("/api/bulk-status/<bulk_id>")
 def bulk_status(bulk_id):
     bulk = BULK_JOBS.get(bulk_id)
@@ -335,6 +448,7 @@ def bulk_status(bulk_id):
         "items": items,
         "invalid": bulk.get("invalid", []),
         "saved_to": bulk.get("saved_to"),
+        "playlist_title": bulk.get("playlist_title"),
     })
 
 

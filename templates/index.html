@@ -656,8 +656,9 @@
             }
 
             .tab-btn {
-                font-size: .82rem;
-                padding: 10px 6px;
+                font-size: .78rem;
+                padding: 10px 4px;
+                gap: 4px;
             }
 
             .quality-chips label {
@@ -683,6 +684,9 @@
             <button class="tab-btn" data-tab="bulk">
                 <span>📚</span> Bulk
             </button>
+            <button class="tab-btn" data-tab="playlist">
+                <span>🎞️</span> Playlist
+            </button>
         </div>
 
         <!-- ================= SINGLE TAB ================= -->
@@ -697,7 +701,6 @@
                 </div>
             </div>
 
-            <!-- Audio quality -->
             <div class="quality-row" id="singleQualityRow">
                 <span class="qlabel">Audio quality:</span>
                 <div class="quality-chips">
@@ -802,6 +805,81 @@
 
             <div id="bulkResult"></div>
         </div>
+
+        <!-- ================= PLAYLIST TAB ================= -->
+        <div id="tab-playlist" class="tab-panel">
+            <label class="lbl">YouTube playlist URL</label>
+            <input id="playlistUrl" type="text" placeholder="https://www.youtube.com/playlist?list=PLxxxxxxxx" />
+            <div class="hint">
+                Works with <code>youtube.com/playlist?list=...</code> and watch URLs that
+                include <code>&amp;list=...</code>.
+            </div>
+
+            <div class="row">
+                <div class="segmented">
+                    <label><input type="radio" name="playlistFormat" value="mp4" checked /><span>📹 MP4</span></label>
+                    <label><input type="radio" name="playlistFormat" value="mp3" /><span>🎵 MP3</span></label>
+                </div>
+            </div>
+
+            <div class="quality-row" id="playlistQualityRow">
+                <span class="qlabel">Audio quality:</span>
+                <div class="quality-chips">
+                    <label><input type="radio" name="playlistQuality" value="128" /><span>128 kbps</span></label>
+                    <label><input type="radio" name="playlistQuality" value="192" /><span>192 kbps</span></label>
+                    <label><input type="radio" name="playlistQuality" value="256" /><span>256 kbps</span></label>
+                    <label><input type="radio" name="playlistQuality" value="320" checked /><span>320 kbps
+                            ★</span></label>
+                </div>
+            </div>
+
+            <div class="quality-row">
+                <span class="qlabel">Max videos:</span>
+                <div class="quality-chips">
+                    <label><input type="radio" name="playlistMax" value="" checked /><span>All</span></label>
+                    <label><input type="radio" name="playlistMax" value="5" /><span>First 5</span></label>
+                    <label><input type="radio" name="playlistMax" value="10" /><span>First 10</span></label>
+                    <label><input type="radio" name="playlistMax" value="25" /><span>First 25</span></label>
+                    <label><input type="radio" name="playlistMax" value="50" /><span>First 50</span></label>
+                </div>
+            </div>
+
+            <div class="save-opts">
+                <div class="title">💾 Where to save the files?</div>
+                <label class="radio-line">
+                    <input type="radio" name="playlistSaveMode" value="browser" checked />
+                    Save each to <b>my computer</b> (click each, or use Save All)
+                </label>
+                <label class="radio-line">
+                    <input type="radio" name="playlistSaveMode" value="server-default" />
+                    Save to server's default folder
+                </label>
+                <label class="radio-line">
+                    <input type="radio" name="playlistSaveMode" value="server-custom" />
+                    Save to a <b>custom folder on the server</b>
+                </label>
+
+                <div id="playlistServerCustomBox" class="folder-pick">
+                    <input id="playlistServerDir" type="text"
+                        placeholder="e.g. /home/user/Music  or  D:\Music or ./my_music" />
+                    <div class="hint">All playlist files go into this folder.</div>
+                </div>
+
+                <div id="playlistServerDefaultBox" class="folder-pick">
+                    <div class="hint">Will be saved in: <code>{{ default_dir }}</code></div>
+                </div>
+            </div>
+
+            <button class="primary" id="playlistGo">⬇ Download Playlist</button>
+            <div class="status" id="playlistStatus"></div>
+            <div class="bar" id="playlistBar">
+                <div></div>
+            </div>
+
+            <button class="save-all" id="playlistSaveAllBtn">💾 Save All Files</button>
+
+            <div id="playlistResult"></div>
+        </div>
     </div>
 
     <script>
@@ -817,7 +895,133 @@
             });
         });
 
-        /* ---------- Show/hide quality row based on format ---------- */
+        /* ---------- Shared helpers ---------- */
+        function escapeHtml(s) {
+            return String(s).replace(/[&<>"']/g, c => ({
+                "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
+            }[c]));
+        }
+
+        function updateSaveAllButton(btnId, items, saveMode) {
+            const btn = $(btnId);
+            const done = items.filter(it => it.status === "done");
+            if (saveMode !== "browser" || done.length === 0) {
+                btn.style.display = "none";
+                return;
+            }
+            btn.style.display = "block";
+            btn.textContent = `💾 Save All ${done.length} File${done.length > 1 ? "s" : ""}`;
+        }
+
+        async function saveAllFiles(btnId, items, ext) {
+            const done = items.filter(it => it.status === "done");
+            if (done.length === 0) return;
+
+            const btn = $(btnId);
+            const originalText = btn.textContent;
+            btn.disabled = true;
+
+            if (window.showDirectoryPicker) {
+                try {
+                    const dirHandle = await window.showDirectoryPicker({ mode: "readwrite" });
+                    let saved = 0;
+                    for (let i = 0; i < done.length; i++) {
+                        const it = done[i];
+                        btn.textContent = `Saving ${i + 1}/${done.length}...`;
+                        try {
+                            const res = await fetch(`/api/file/${it.job_id}`);
+                            const blob = await res.blob();
+                            const rawTitle = it.title || `video_${i + 1}`;
+                            const safeName = rawTitle
+                                .replace(/[^\w\-. ]+/g, "_").slice(0, 80) + "." + ext;
+                            const fileHandle = await dirHandle.getFileHandle(safeName, { create: true });
+                            const writable = await fileHandle.createWritable();
+                            await writable.write(blob);
+                            await writable.close();
+                            saved++;
+                        } catch (err) {
+                            console.error("Failed to save", it.title, err);
+                        }
+                    }
+                    btn.textContent = `✅ Saved ${saved}/${done.length} files`;
+                    setTimeout(() => { btn.textContent = originalText; btn.disabled = false; }, 2500);
+                    return;
+                } catch (e) {
+                    console.warn("Folder picker cancelled or failed:", e);
+                }
+            }
+
+            btn.textContent = `Downloading ${done.length} files...`;
+            for (let i = 0; i < done.length; i++) {
+                const a = document.createElement("a");
+                a.href = `/api/file/${done[i].job_id}`;
+                a.download = "";
+                document.body.appendChild(a);
+                a.click();
+                a.remove();
+                await new Promise(r => setTimeout(r, 600));
+            }
+            btn.textContent = `✅ Triggered ${done.length} downloads`;
+            setTimeout(() => { btn.textContent = originalText; btn.disabled = false; }, 2500);
+        }
+
+        function renderItems(items, saveMode, containerId) {
+            const html = items.map((it, idx) => {
+                const pct = it.status === "done" ? 100 : (it.percent || 0);
+                const rawTitle = it.title || it.url || "(unknown)";
+                const titleHtml = escapeHtml(
+                    rawTitle.length > 70 ? rawTitle.slice(0, 70) + "…" : rawTitle
+                );
+
+                let badgeContent = it.status;
+                if (it.status === "downloading" || it.status === "processing") {
+                    badgeContent = `<span class="pulse"></span>${it.status}`;
+                } else if (it.status === "done") {
+                    badgeContent = `✓ ${it.status}`;
+                } else if (it.status === "error") {
+                    badgeContent = `✕ ${it.status}`;
+                }
+
+                const speedTxt = (it.status === "downloading" && it.speed)
+                    ? ` · ${(it.speed / 1024 / 1024).toFixed(2)} MB/s`
+                    : "";
+                const uploaderTxt = it.uploader ? ` · ${escapeHtml(it.uploader)}` : "";
+                const metaHtml = `<div class="meta">${pct}%${speedTxt}${uploaderTxt}</div>`;
+
+                let actionHtml = "";
+                if (it.status === "done") {
+                    if (saveMode === "browser") {
+                        actionHtml = `<a class="dl" href="/api/file/${it.job_id}">⬇ Save</a>`;
+                    } else {
+                        actionHtml = `<span class="hint">saved: <code>${escapeHtml(it.filename || "")}</code></span>`;
+                    }
+                } else if (it.status === "error") {
+                    actionHtml = `<span class="error" style="font-size:.75rem">${escapeHtml(it.error || "error")}</span>`;
+                }
+
+                return `
+                    <div class="bulk-item">
+                        <div class="row1">
+                            <div class="title-cell">
+                                <span class="title-text">
+                                    <span class="idx">${idx + 1}</span>${titleHtml}
+                                </span>
+                            </div>
+                            <span class="badge ${it.status}">${badgeContent}</span>
+                        </div>
+                        <div class="progress-line">
+                            <div class="mini-bar"><div style="width:${pct}%"></div></div>
+                            <span class="pct">${pct}%</span>
+                        </div>
+                        ${metaHtml}
+                        ${actionHtml ? `<div style="margin-top:8px">${actionHtml}</div>` : ""}
+                    </div>`;
+            }).join("");
+
+            $(containerId).innerHTML = `<div class="bulk-list">${html}</div>`;
+        }
+
+        /* ---------- Show/hide quality rows based on format ---------- */
         function toggleQualityRow(formatSelector, rowId) {
             const fmt = document.querySelector(formatSelector + ':checked').value;
             $(rowId).style.display = fmt === "mp3" ? "flex" : "none";
@@ -828,13 +1032,15 @@
         document.querySelectorAll('input[name="bulkFormat"]').forEach(r => {
             r.addEventListener("change", () => toggleQualityRow('input[name="bulkFormat"]', "bulkQualityRow"));
         });
-        // initial state (MP4 default -> hide)
+        document.querySelectorAll('input[name="playlistFormat"]').forEach(r => {
+            r.addEventListener("change", () => toggleQualityRow('input[name="playlistFormat"]', "playlistQualityRow"));
+        });
         toggleQualityRow('input[name="format"]', "singleQualityRow");
         toggleQualityRow('input[name="bulkFormat"]', "bulkQualityRow");
+        toggleQualityRow('input[name="playlistFormat"]', "playlistQualityRow");
 
         /* ================= SINGLE TAB LOGIC ================= */
         let pollHandle = null;
-        let currentJobId = null;
         let currentSaveMode = "browser";
         let currentTitle = "media";
         let currentExt = "mp4";
@@ -865,12 +1071,12 @@
             currentExt = format;
 
             if (!url) {
-                showError("Please paste a YouTube link.");
+                $("status").innerHTML = `<span class="error">Please paste a YouTube link.</span>`;
                 $("go").disabled = false;
                 return;
             }
             if (saveMode === "server-custom" && !serverDir) {
-                showError("Please enter a server folder path, or choose another option.");
+                $("status").innerHTML = `<span class="error">Please enter a server folder path, or choose another option.</span>`;
                 $("go").disabled = false;
                 return;
             }
@@ -887,12 +1093,11 @@
                 const data = await res.json();
 
                 if (!res.ok) {
-                    showError(data.error || "Failed to start download.");
+                    $("status").innerHTML = `<span class="error">${escapeHtml(data.error || "Failed to start download.")}</span>`;
                     $("go").disabled = false;
                     return;
                 }
 
-                currentJobId = data.job_id;
                 currentSaveMode = saveMode;
 
                 if (saveMode === "server-custom" || saveMode === "server-default") {
@@ -903,7 +1108,7 @@
                 $("bar").style.display = "block";
                 poll(data.job_id);
             } catch (e) {
-                showError("Network error: " + e.message);
+                $("status").innerHTML = `<span class="error">Network error: ${escapeHtml(e.message)}</span>`;
                 $("go").disabled = false;
             }
         });
@@ -917,11 +1122,9 @@
 
                     if (job.status === "downloading") {
                         const speedTxt = job.speed
-                            ? ` · ${(job.speed / 1024 / 1024).toFixed(2)} MB/s`
-                            : "";
+                            ? ` · ${(job.speed / 1024 / 1024).toFixed(2)} MB/s` : "";
                         const etaTxt = job.eta ? ` · ETA ${job.eta}s` : "";
-                        $("status").textContent =
-                            `⬇ Downloading… ${job.percent}%${speedTxt}${etaTxt}`;
+                        $("status").textContent = `⬇ Downloading… ${job.percent}%${speedTxt}${etaTxt}`;
                         $("bar").firstElementChild.style.width = job.percent + "%";
                     } else if (job.status === "processing") {
                         $("status").textContent = "⚙️ Converting / merging…";
@@ -945,12 +1148,12 @@
                         $("go").disabled = false;
                     } else if (job.status === "error") {
                         clearInterval(pollHandle);
-                        showError("Error: " + job.error);
+                        $("status").innerHTML = `<span class="error">Error: ${escapeHtml(job.error)}</span>`;
                         $("go").disabled = false;
                     }
                 } catch (e) {
                     clearInterval(pollHandle);
-                    showError("Lost connection to server.");
+                    $("status").innerHTML = `<span class="error">Lost connection to server.</span>`;
                     $("go").disabled = false;
                 }
             }, 1000);
@@ -981,16 +1184,6 @@
                     $("pickHint").textContent = "Cancelled or failed: " + e.message;
                 }
             });
-        }
-
-        function showError(msg) {
-            $("status").innerHTML = `<span class="error">${escapeHtml(msg)}</span>`;
-            $("bar").style.display = "none";
-        }
-        function escapeHtml(s) {
-            return String(s).replace(/[&<>"']/g, c => ({
-                "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
-            }[c]));
         }
 
         /* ================= BULK TAB LOGIC ================= */
@@ -1039,11 +1232,11 @@
             $("saveAllBtn").style.display = "none";
 
             if (!urls) {
-                bulkShowError("Please paste at least one link.");
+                $("bulkStatus").innerHTML = `<span class="error">Please paste at least one link.</span>`;
                 return;
             }
             if (saveMode === "server-custom" && !serverDir) {
-                bulkShowError("Please enter a server folder path, or choose another option.");
+                $("bulkStatus").innerHTML = `<span class="error">Please enter a server folder path, or choose another option.</span>`;
                 return;
             }
 
@@ -1062,7 +1255,7 @@
                 const data = await res.json();
 
                 if (!res.ok) {
-                    bulkShowError(data.error || "Failed to start bulk download.");
+                    $("bulkStatus").innerHTML = `<span class="error">${escapeHtml(data.error || "Failed to start bulk download.")}</span>`;
                     $("bulkGo").disabled = false;
                     return;
                 }
@@ -1073,12 +1266,11 @@
                         `<div class="invalid-list">⚠️ Skipped ${data.invalid.length} invalid link(s):<ul>${list}</ul></div>`;
                 }
 
-                $("bulkStatus").textContent =
-                    `📥 Queued ${data.total} download(s) → ${data.saved_to}`;
+                $("bulkStatus").textContent = `📥 Queued ${data.total} download(s) → ${data.saved_to}`;
                 $("bulkBar").style.display = "block";
                 bulkPoll(data.bulk_id, saveMode);
             } catch (e) {
-                bulkShowError("Network error: " + e.message);
+                $("bulkStatus").innerHTML = `<span class="error">Network error: ${escapeHtml(e.message)}</span>`;
                 $("bulkGo").disabled = false;
             }
         });
@@ -1097,8 +1289,8 @@
                         (data.errors ? ` · ${data.errors} error(s)` : "");
 
                     lastBulkItems = data.items;
-                    renderBulkItems(data.items, saveMode);
-                    updateSaveAllButton(data.items, saveMode);
+                    renderItems(data.items, saveMode, "bulkResult");
+                    updateSaveAllButton("saveAllBtn", data.items, saveMode);
 
                     if (data.done + data.errors >= data.total) {
                         clearInterval(bulkPollHandle);
@@ -1106,153 +1298,126 @@
                     }
                 } catch (e) {
                     clearInterval(bulkPollHandle);
-                    bulkShowError("Lost connection to server.");
+                    $("bulkStatus").innerHTML = `<span class="error">Lost connection to server.</span>`;
                     $("bulkGo").disabled = false;
                 }
             }, 1000);
         }
 
-        function updateSaveAllButton(items, saveMode) {
-            const btn = $("saveAllBtn");
-            const done = items.filter(it => it.status === "done");
+        $("saveAllBtn").addEventListener("click", () => {
+            saveAllFiles("saveAllBtn", lastBulkItems, lastBulkExt);
+        });
 
-            if (saveMode !== "browser" || done.length === 0) {
-                btn.style.display = "none";
+        /* ================= PLAYLIST TAB LOGIC ================= */
+        let playlistPollHandle = null;
+        let playlistSaveMode = "browser";
+        let lastPlaylistItems = [];
+        let lastPlaylistExt = "mp4";
+
+        document.querySelectorAll('input[name="playlistSaveMode"]').forEach(r => {
+            r.addEventListener("change", () => {
+                playlistSaveMode = r.value;
+                $("playlistServerCustomBox").style.display = r.value === "server-custom" ? "block" : "none";
+                $("playlistServerDefaultBox").style.display = r.value === "server-default" ? "block" : "none";
+            });
+        });
+
+        document.querySelectorAll('input[name="playlistFormat"]').forEach(r => {
+            r.addEventListener("change", () => {
+                lastPlaylistExt = document.querySelector('input[name="playlistFormat"]:checked').value;
+            });
+        });
+
+        $("playlistGo").addEventListener("click", async () => {
+            const url = $("playlistUrl").value.trim();
+            const format = document.querySelector('input[name="playlistFormat"]:checked').value;
+            const quality = document.querySelector('input[name="playlistQuality"]:checked').value;
+            const maxItems = document.querySelector('input[name="playlistMax"]:checked').value;
+            const saveMode = document.querySelector('input[name="playlistSaveMode"]:checked').value;
+            const serverDir = saveMode === "server-custom" ? $("playlistServerDir").value.trim() : "";
+
+            $("playlistResult").innerHTML = "";
+            $("playlistStatus").textContent = "";
+            $("playlistBar").style.display = "none";
+            $("playlistSaveAllBtn").style.display = "none";
+
+            if (!url) {
+                $("playlistStatus").innerHTML = `<span class="error">Please paste a playlist URL.</span>`;
+                return;
+            }
+            if (saveMode === "server-custom" && !serverDir) {
+                $("playlistStatus").innerHTML = `<span class="error">Please enter a server folder path, or choose another option.</span>`;
                 return;
             }
 
-            btn.style.display = "block";
-            btn.textContent = `💾 Save All ${done.length} File${done.length > 1 ? "s" : ""}`;
-        }
+            $("playlistGo").disabled = true;
+            lastPlaylistExt = format;
+            $("playlistStatus").textContent = "🔎 Reading playlist info…";
+            $("playlistBar").style.display = "block";
+            $("playlistBar").firstElementChild.style.width = "5%";
 
-        $("saveAllBtn").addEventListener("click", async () => {
-            const done = lastBulkItems.filter(it => it.status === "done");
-            if (done.length === 0) return;
+            try {
+                const res = await fetch("/api/playlist-download", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        url, format, quality,
+                        max_items: maxItems || null,
+                        server_dir: saveMode === "server-custom" ? serverDir : "",
+                    })
+                });
+                const data = await res.json();
 
-            const btn = $("saveAllBtn");
-            const originalText = btn.textContent;
-            btn.disabled = true;
-
-            if (window.showDirectoryPicker) {
-                try {
-                    const dirHandle = await window.showDirectoryPicker({ mode: "readwrite" });
-                    let saved = 0;
-
-                    for (let i = 0; i < done.length; i++) {
-                        const it = done[i];
-                        btn.textContent = `Saving ${i + 1}/${done.length}...`;
-
-                        try {
-                            const res = await fetch(`/api/file/${it.job_id}`);
-                            const blob = await res.blob();
-
-                            const rawTitle = it.title || `video_${i + 1}`;
-                            const safeName = rawTitle
-                                .replace(/[^\w\-. ]+/g, "_")
-                                .slice(0, 80) + "." + lastBulkExt;
-
-                            const fileHandle = await dirHandle.getFileHandle(safeName, { create: true });
-                            const writable = await fileHandle.createWritable();
-                            await writable.write(blob);
-                            await writable.close();
-                            saved++;
-                        } catch (err) {
-                            console.error("Failed to save", it.title, err);
-                        }
-                    }
-
-                    btn.textContent = `✅ Saved ${saved}/${done.length} files`;
-                    setTimeout(() => {
-                        btn.textContent = originalText;
-                        btn.disabled = false;
-                    }, 2500);
+                if (!res.ok) {
+                    $("playlistStatus").innerHTML = `<span class="error">${escapeHtml(data.error || "Failed to start playlist download.")}</span>`;
+                    $("playlistBar").style.display = "none";
+                    $("playlistGo").disabled = false;
                     return;
-                } catch (e) {
-                    console.warn("Folder picker cancelled or failed:", e);
                 }
-            }
 
-            btn.textContent = `Downloading ${done.length} files...`;
-            for (let i = 0; i < done.length; i++) {
-                const it = done[i];
-                const a = document.createElement("a");
-                a.href = `/api/file/${it.job_id}`;
-                a.download = "";
-                document.body.appendChild(a);
-                a.click();
-                a.remove();
-                await new Promise(r => setTimeout(r, 600));
+                $("playlistStatus").textContent =
+                    `🎞️ "${data.playlist_title}" — queued ${data.total} video(s) → ${data.saved_to}`;
+                playlistPoll(data.bulk_id, saveMode);
+            } catch (e) {
+                $("playlistStatus").innerHTML = `<span class="error">Network error: ${escapeHtml(e.message)}</span>`;
+                $("playlistBar").style.display = "none";
+                $("playlistGo").disabled = false;
             }
-
-            btn.textContent = `✅ Triggered ${done.length} downloads`;
-            setTimeout(() => {
-                btn.textContent = originalText;
-                btn.disabled = false;
-            }, 2500);
         });
 
-        function renderBulkItems(items, saveMode) {
-            const html = items.map((it, idx) => {
-                const pct = it.status === "done" ? 100 : (it.percent || 0);
-                const rawTitle = it.title || it.url || "(unknown)";
-                const titleHtml = escapeHtml(
-                    rawTitle.length > 70 ? rawTitle.slice(0, 70) + "…" : rawTitle
-                );
+        function playlistPoll(bulkId, saveMode) {
+            clearInterval(playlistPollHandle);
+            playlistPollHandle = setInterval(async () => {
+                try {
+                    const res = await fetch(`/api/bulk-status/${bulkId}`);
+                    const data = await res.json();
 
-                let badgeContent = it.status;
-                if (it.status === "downloading") {
-                    badgeContent = `<span class="pulse"></span>${it.status}`;
-                } else if (it.status === "processing") {
-                    badgeContent = `<span class="pulse"></span>${it.status}`;
-                } else if (it.status === "done") {
-                    badgeContent = `✓ ${it.status}`;
-                } else if (it.status === "error") {
-                    badgeContent = `✕ ${it.status}`;
-                }
+                    $("playlistBar").firstElementChild.style.width = data.overall_percent + "%";
+                    $("playlistStatus").textContent =
+                        `📊 ${data.done + data.errors}/${data.total} finished ` +
+                        `(${data.overall_percent}%)` +
+                        (data.errors ? ` · ${data.errors} error(s)` : "") +
+                        (data.playlist_title ? ` · ${data.playlist_title}` : "");
 
-                const speedTxt = (it.status === "downloading" && it.speed)
-                    ? ` · ${(it.speed / 1024 / 1024).toFixed(2)} MB/s`
-                    : "";
-                const uploaderTxt = it.uploader ? ` · ${escapeHtml(it.uploader)}` : "";
-                const metaHtml = `<div class="meta">${pct}%${speedTxt}${uploaderTxt}</div>`;
+                    lastPlaylistItems = data.items;
+                    renderItems(data.items, saveMode, "playlistResult");
+                    updateSaveAllButton("playlistSaveAllBtn", data.items, saveMode);
 
-                let actionHtml = "";
-                if (it.status === "done") {
-                    if (saveMode === "browser") {
-                        actionHtml = `<a class="dl" href="/api/file/${it.job_id}">⬇ Save</a>`;
-                    } else {
-                        actionHtml = `<span class="hint">saved: <code>${escapeHtml(it.filename || "")}</code></span>`;
+                    if (data.done + data.errors >= data.total) {
+                        clearInterval(playlistPollHandle);
+                        $("playlistGo").disabled = false;
                     }
-                } else if (it.status === "error") {
-                    actionHtml = `<span class="error" style="font-size:.75rem">${escapeHtml(it.error || "error")}</span>`;
+                } catch (e) {
+                    clearInterval(playlistPollHandle);
+                    $("playlistStatus").innerHTML = `<span class="error">Lost connection to server.</span>`;
+                    $("playlistGo").disabled = false;
                 }
-
-                return `
-                    <div class="bulk-item">
-                        <div class="row1">
-                            <div class="title-cell">
-                                <span class="title-text">
-                                    <span class="idx">${idx + 1}</span>${titleHtml}
-                                </span>
-                            </div>
-                            <span class="badge ${it.status}">${badgeContent}</span>
-                        </div>
-                        <div class="progress-line">
-                            <div class="mini-bar"><div style="width:${pct}%"></div></div>
-                            <span class="pct">${pct}%</span>
-                        </div>
-                        ${metaHtml}
-                        ${actionHtml ? `<div style="margin-top:8px">${actionHtml}</div>` : ""}
-                    </div>`;
-            }).join("");
-
-            $("bulkResult").innerHTML = `<div class="bulk-list">${html}</div>`;
+            }, 1000);
         }
 
-        function bulkShowError(msg) {
-            $("bulkStatus").innerHTML = `<span class="error">${escapeHtml(msg)}</span>`;
-            $("bulkBar").style.display = "none";
-        }
+        $("playlistSaveAllBtn").addEventListener("click", () => {
+            saveAllFiles("playlistSaveAllBtn", lastPlaylistItems, lastPlaylistExt);
+        });
     </script>
 </body>
 
