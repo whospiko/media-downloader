@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>YouTube Downloader</title>
+    <title>Media Downloader</title>
     <style>
         * {
             box-sizing: border-box;
@@ -625,21 +625,138 @@
             word-break: break-all;
         }
 
-        .card-cta {
-            margin-top: 16px;
-            padding: 14px 16px;
-            background: rgba(99, 102, 241, .08);
-            border: 1px solid rgba(99, 102, 241, .25);
-            border-radius: 12px;
-            font-size: .85rem;
-            color: #c7d2fe;
+        /* Platform switcher (3-up) */
+        .platform-switch {
             display: flex;
-            gap: 10px;
-            align-items: flex-start;
+            gap: 6px;
+            background: #0f172a;
+            padding: 5px;
+            border-radius: 12px;
+            border: 1px solid #1e293b;
+            margin-bottom: 8px;
         }
 
-        .card-cta .ico {
-            font-size: 1.1rem;
+        .platform-switch label {
+            flex: 1;
+            text-align: center;
+            padding: 9px 8px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: .84rem;
+            font-weight: 600;
+            color: var(--muted);
+            transition: .15s;
+            user-select: none;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 5px;
+        }
+
+        .platform-switch input {
+            display: none;
+        }
+
+        .platform-switch label:hover {
+            color: var(--text);
+        }
+
+        .platform-switch label:has(input:checked) {
+            background: linear-gradient(135deg, var(--primary), #7c3aed);
+            color: #fff;
+            box-shadow: 0 4px 12px rgba(99, 102, 241, .3);
+        }
+
+        /* TikTok brand */
+        .platform-switch label.tiktok-active:has(input:checked) {
+            background: linear-gradient(135deg, #fe2c55, #25f4ee 200%);
+            box-shadow: 0 4px 12px rgba(254, 44, 85, .35);
+            color: #fff;
+        }
+
+        /* Facebook brand */
+        .platform-switch label.facebook-active:has(input:checked) {
+            background: linear-gradient(135deg, #1877f2, #0a4fa3);
+            box-shadow: 0 4px 12px rgba(24, 119, 242, .4);
+            color: #fff;
+        }
+
+        /* Watermark toggle */
+        .wm-row {
+            display: none;
+            align-items: center;
+            gap: 10px;
+            margin-top: 14px;
+            padding: 12px 14px;
+            background: #0b1120;
+            border: 1px solid #1e293b;
+            border-radius: 12px;
+            animation: fadeIn .2s ease;
+        }
+
+        .wm-row.visible {
+            display: flex;
+        }
+
+        .wm-row .wm-label {
+            flex: 1;
+            font-size: .88rem;
+            color: var(--text);
+            font-weight: 500;
+        }
+
+        .wm-row .wm-label small {
+            display: block;
+            color: var(--dim);
+            font-size: .72rem;
+            margin-top: 2px;
+            font-weight: 400;
+        }
+
+        /* iOS-style switch */
+        .switch {
+            position: relative;
+            display: inline-block;
+            width: 46px;
+            height: 26px;
+            flex-shrink: 0;
+        }
+
+        .switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+
+        .switch .slider {
+            position: absolute;
+            cursor: pointer;
+            inset: 0;
+            background: #334155;
+            border-radius: 999px;
+            transition: .2s;
+        }
+
+        .switch .slider:before {
+            content: "";
+            position: absolute;
+            height: 20px;
+            width: 20px;
+            left: 3px;
+            top: 3px;
+            background: #cbd5e1;
+            border-radius: 50%;
+            transition: .2s;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, .3);
+        }
+
+        .switch input:checked+.slider {
+            background: linear-gradient(135deg, var(--primary), #7c3aed);
+        }
+
+        .switch input:checked+.slider:before {
+            transform: translateX(20px);
+            background: #fff;
         }
 
         @media (max-width: 520px) {
@@ -665,6 +782,12 @@
                 padding: 6px 10px;
                 font-size: .76rem;
             }
+
+            .platform-switch label {
+                font-size: .76rem;
+                padding: 8px 4px;
+                gap: 3px;
+            }
         }
     </style>
 </head>
@@ -673,9 +796,9 @@
     <div class="card">
         <div class="header">
             <div class="logo">🎵</div>
-            <h1>YouTube Downloader</h1>
+            <h1>Media Downloader</h1>
         </div>
-        <p class="sub">High-quality audio &amp; video downloads from YouTube links.</p>
+        <p class="sub">High-quality audio &amp; video downloads from YouTube, TikTok &amp; Facebook.</p>
 
         <div class="tabs">
             <button class="tab-btn active" data-tab="single">
@@ -691,7 +814,16 @@
 
         <!-- ================= SINGLE TAB ================= -->
         <div id="tab-single" class="tab-panel active">
-            <label class="lbl">YouTube link</label>
+            <label class="lbl">Platform</label>
+            <div class="platform-switch">
+                <label><input type="radio" name="platform" value="youtube" checked /><span>▶️ YouTube</span></label>
+                <label class="tiktok-active"><input type="radio" name="platform" value="tiktok" /><span>🎵
+                        TikTok</span></label>
+                <label class="facebook-active"><input type="radio" name="platform" value="facebook" /><span>📘
+                        Facebook</span></label>
+            </div>
+
+            <label class="lbl">Video link</label>
             <input id="url" type="text" placeholder="https://www.youtube.com/watch?v=..." />
 
             <div class="row">
@@ -710,6 +842,18 @@
                     <label><input type="radio" name="singleQuality" value="320" checked /><span>320 kbps
                             ★</span></label>
                 </div>
+            </div>
+
+            <!-- TikTok-only: watermark toggle -->
+            <div class="wm-row" id="watermarkRow">
+                <div class="wm-label">
+                    Remove TikTok watermark
+                    <small>Delivers the clean version when available. MP4 only.</small>
+                </div>
+                <label class="switch">
+                    <input type="checkbox" id="removeWatermark" checked />
+                    <span class="slider"></span>
+                </label>
             </div>
 
             <div class="save-opts">
@@ -1044,7 +1188,42 @@
         let currentSaveMode = "browser";
         let currentTitle = "media";
         let currentExt = "mp4";
+        let currentPlatform = "youtube";
 
+        /* ----- Platform switcher ----- */
+        const URL_PLACEHOLDERS = {
+            youtube: "https://www.youtube.com/watch?v=...",
+            tiktok: "https://www.tiktok.com/@user/video/1234...",
+            facebook: "https://www.facebook.com/watch?v=... or fb.watch/...",
+        };
+
+        function updatePlatformUI(platform) {
+            currentPlatform = platform;
+            $("url").placeholder = URL_PLACEHOLDERS[platform] || URL_PLACEHOLDERS.youtube;
+            // Show watermark row only for TikTok
+            const wmRow = $("watermarkRow");
+            if (platform === "tiktok") {
+                wmRow.classList.add("visible");
+            } else {
+                wmRow.classList.remove("visible");
+            }
+        }
+
+        document.querySelectorAll('input[name="platform"]').forEach(r => {
+            r.addEventListener("change", () => {
+                updatePlatformUI(r.value);
+                // Reset format to MP4 on platform switch (TikTok/IG MP3 is uncommon)
+                if (r.value === "tiktok") {
+                    const mp4 = document.querySelector('input[name="format"][value="mp4"]');
+                    if (mp4) {
+                        mp4.checked = true;
+                        mp4.dispatchEvent(new Event("change"));
+                    }
+                }
+            });
+        });
+
+        /* ----- Save mode toggles ----- */
         document.querySelectorAll('input[name="saveMode"]').forEach(r => {
             r.addEventListener("change", () => {
                 currentSaveMode = r.value;
@@ -1057,21 +1236,26 @@
             r.addEventListener("change", () => { currentExt = r.value; });
         });
 
+        /* ----- Download button ----- */
         $("go").addEventListener("click", async () => {
             const url = $("url").value.trim();
             const format = document.querySelector('input[name="format"]:checked').value;
             const quality = document.querySelector('input[name="singleQuality"]:checked').value;
             const saveMode = document.querySelector('input[name="saveMode"]:checked').value;
             const serverDir = saveMode === "server-custom" ? $("serverDir").value.trim() : "";
+            const platform = document.querySelector('input[name="platform"]:checked').value;
+            const removeWatermark = $("removeWatermark").checked;
 
             $("result").innerHTML = "";
             $("status").textContent = "";
             $("bar").style.display = "none";
             $("go").disabled = true;
             currentExt = format;
+            currentPlatform = platform;
 
             if (!url) {
-                $("status").innerHTML = `<span class="error">Please paste a YouTube link.</span>`;
+                const label = platform === "tiktok" ? "TikTok" : platform === "facebook" ? "Facebook" : "YouTube";
+                $("status").innerHTML = `<span class="error">Please paste a ${label} link.</span>`;
                 $("go").disabled = false;
                 return;
             }
@@ -1087,6 +1271,8 @@
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify({
                         url, format, quality,
+                        platform,
+                        remove_watermark: platform === "tiktok" ? removeWatermark : false,
                         server_dir: saveMode === "server-custom" ? serverDir : "",
                     })
                 });

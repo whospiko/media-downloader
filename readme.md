@@ -1,6 +1,6 @@
-# 🎵 YouTube Downloader
+# 🎵 Media Downloader
 
-> A modern, self-hosted web app to download YouTube videos as **MP4** or **high-quality MP3 (up to 320 kbps)** — with Single, Bulk, and Playlist modes, folder picking, and a clean dark UI.
+> A modern, self-hosted web app to download videos from **YouTube, TikTok, and Facebook** as **MP4** or **high-quality MP3 (up to 320 kbps)** — with Single, Bulk, and Playlist modes, optional TikTok watermark removal, folder picking, and a clean dark UI.
 
 ![Python](https://img.shields.io/badge/Python-3.10%2B-3776AB?logo=python&logoColor=white)
 ![Flask](https://img.shields.io/badge/Flask-3.0-000000?logo=flask&logoColor=white)
@@ -20,6 +20,7 @@
   - [Single Download](#single-download)
   - [Bulk Download](#bulk-download)
   - [Playlist Download](#playlist-download)
+- [Platform Notes](#-platform-notes)
 - [Access from Your Phone (LAN)](#-access-from-your-phone-lan)
 - [Configuration](#-configuration)
 - [Troubleshooting](#-troubleshooting)
@@ -35,13 +36,18 @@
 ## ✨ Features
 
 ### 🎯 Three Download Modes
-- **Single** — paste one YouTube link, download instantly
-- **Bulk** — paste many links (one per line), each queued as its own job
+- **Single** — one URL, one download
+- **Bulk** — paste many YouTube links (one per line), each queued independently
 - **Playlist** — paste a YouTube playlist URL and grab every video in it
 
-### 🔊 Audio Quality
+### 🌐 Multi-Platform Support (Single Tab)
+- **▶️ YouTube** — videos, shorts, watch URLs
+- **🎵 TikTok** — with an optional **watermark removal** toggle
+- **📘 Facebook** — videos, reels, watch pages, and `fb.watch` short links
+
+### 🔊 High-Quality Audio
 - Choose **128 / 192 / 256 / 320 kbps** MP3
-- Automatically picks the **highest-bitrate source** YouTube offers
+- Automatically picks the **highest-bitrate source** available
 - **Cover art + metadata** (title, artist) embedded into every MP3
 - Matches Spotify Premium's "Very High" tier output bitrate
 
@@ -49,7 +55,7 @@
 - **My computer** — browser download, or pick a folder directly via Chrome/Edge File System Access API
 - **Server's default folder** — `./downloads/` next to `app.py`
 - **Custom folder on server** — any absolute or relative path
-- **💚 Save All** button — one click, one folder picker, all files saved (Chrome/Edge); sequential fallback for Firefox
+- **💚 Save All** — one click, one folder picker, all files saved (Chrome/Edge); sequential fallback for Firefox
 
 ### 📊 Real-Time Feedback
 - Live percent, speed (MB/s), ETA for active downloads
@@ -58,13 +64,13 @@
 - Overall bulk/playlist progress bar
 
 ### 🛡 Reliability
-- **Smart concurrency** — max 2 simultaneous downloads to avoid YouTube CDN throttling
+- **Smart concurrency** — max 2 simultaneous downloads to avoid CDN throttling
 - **Auto-retry** — 10 retries per HTTP request & per fragment, with exponential backoff
 - **Resumable downloads** — 1 MiB chunks so a dropped connection resumes, not restarts
 - **IPv4 forced** — fixes common `googlevideo.com` timeouts on Windows
 
 ### 🎨 Experience
-- Modern dark UI with gradient accents
+- Modern dark UI with gradient accents and per-platform brand colors
 - Fully responsive — works great on mobile
 - **LAN access** — use it from your phone over Wi-Fi
 - No build step, no frontend dependencies — just vanilla JS + CSS
@@ -79,6 +85,10 @@
 | :-: | :-: | :-: |
 | ![Single Tab](docs/single.png) | ![Bulk Tab](docs/bulk.png) | ![Playlist Tab](docs/playlist.png) |
 
+| TikTok Platform | Facebook Platform |
+| :-: | :-: |
+| ![TikTok](docs/tiktok.png) | ![Facebook](docs/facebook.png) |
+
 | Mobile View |
 | :-: |
 | ![Mobile](docs/mobile.png) |
@@ -89,13 +99,14 @@
 
 ### Prerequisites
 
-You'll need three tools installed:
+You'll need four tools installed:
 
 | Tool | Why | Minimum |
 |---|---|---|
 | **Python** | Runs the app | 3.10+ |
 | **FFmpeg** | Merges video/audio & converts to MP3 | Any recent version |
 | **Deno** | JS runtime required by yt-dlp for YouTube | Any recent version |
+| **curl_cffi** | Browser impersonation for TikTok/Facebook | Installed via pip |
 
 #### Install Python
 
@@ -135,7 +146,8 @@ python -m venv .venv
 source .venv/bin/activate        # Windows PowerShell: .venv\Scripts\activate
                                  # Windows CMD:        .venv\Scripts\activate.bat
 
-# 3. Install dependencies
+# 3. Install dependencies (includes curl_cffi for TikTok/Facebook)
+pip install -U --pre "yt-dlp[default,curl-cffi]"
 pip install -r requirements.txt
 
 # 4. Run the app
@@ -168,6 +180,8 @@ youtube-downloader/
 │   ├── single.png
 │   ├── bulk.png
 │   ├── playlist.png
+│   ├── tiktok.png
+│   ├── facebook.png
 │   └── mobile.png
 └── README.md
 ```
@@ -179,15 +193,17 @@ youtube-downloader/
 ### Single Download
 
 1. Open the **Single** tab.
-2. Paste a YouTube URL.
-3. Pick **MP4** (video) or **MP3** (audio only).
-4. If **MP3**, pick a bitrate — default **320 kbps** is best.
-5. Choose where to save:
+2. Pick a platform: **▶️ YouTube**, **🎵 TikTok**, or **📘 Facebook**.
+3. Paste the video URL — the placeholder updates for the chosen platform.
+4. Pick **MP4** (video) or **MP3** (audio only).
+5. If **MP3**, pick a bitrate — default **320 kbps** is best.
+6. *(TikTok only)* Choose whether to **remove the watermark** — the toggle appears automatically.
+7. Choose where to save:
    - **Save to my computer** — browser downloads it (or pick a folder directly in Chrome/Edge)
    - **Server's default folder** — saves to `./downloads/`
    - **Custom folder on the server** — type a path like `D:\Music` or `/home/user/Music`
-6. Click **⬇ Download**.
-7. Watch the progress bar; when done, click **Save** or use the folder picker.
+8. Click **⬇ Download**.
+9. Watch the progress bar; when done, click **Save** or use the folder picker.
 
 ### Bulk Download
 
@@ -202,6 +218,8 @@ youtube-downloader/
 7. When items finish, click **💾 Save All N Files**:
    - **Chrome/Edge** — pick one folder, all files save silently
    - **Firefox** — browser triggers sequential downloads (accept the "multiple downloads" prompt once)
+
+> ℹ️ Bulk is **YouTube-only**. TikTok and Facebook are single-video downloads only.
 
 ### Playlist Download
 
@@ -223,6 +241,37 @@ youtube-downloader/
 - Private playlists require cookies (see [Troubleshooting](#-troubleshooting)).
 - The playlist title appears in the status line.
 - Each video is downloaded individually — you can retry only the failed ones by re-pasting the specific video URLs in the Bulk tab.
+
+---
+
+## 🌐 Platform Notes
+
+| Platform | Single | Bulk | Playlist | Watermark Removal | Cookies Needed? |
+|---|:-:|:-:|:-:|:-:|---|
+| **YouTube** | ✅ | ✅ | ✅ | — | Only for age-restricted / private |
+| **TikTok** | ✅ | — | — | ✅ (optional toggle) | Rarely — only if yt-dlp asks |
+| **Facebook** | ✅ | — | — | — | For private / friends-only videos |
+
+### TikTok — Watermark Removal
+
+- The **Remove TikTok watermark** toggle is on by default. It asks yt-dlp's TikTok extractor to fetch the clean playback URL from TikTok's mobile API.
+- **Best-effort:** TikTok sometimes serves a watermarked stream even when asked for clean. If you get a watermarked file with the toggle ON, retry later or try a different video.
+- **MP4 only** — audio has no watermark, so the toggle hides when MP3 is selected.
+- **Keep yt-dlp updated** — TikTok's API changes frequently. `pip install -U --pre yt-dlp` fixes most extraction failures.
+- If you see `no impersonate target is available`, install the browser-impersonation dependency:
+  ```bash
+  pip install -U --pre "yt-dlp[default,curl-cffi]"
+  ```
+  Then verify with `yt-dlp --list-impersonate-targets`.
+
+### Facebook
+
+- **Public videos work without cookies.**
+- **Private, friends-only, or age-restricted videos** need cookies. Add to `common_opts` in `app.py`:
+  ```python
+  "cookiesfrombrowser": ("firefox",),   # or ("chrome",), ("edge",)
+  ```
+- No watermark toggle needed — Facebook doesn't overlay one.
 
 ---
 
@@ -252,7 +301,7 @@ Run the app on your PC, use it from your phone's browser over Wi-Fi.
 **PowerShell method** (run as Administrator):
 
 ```powershell
-New-NetFirewallRule -DisplayName "Flask YouTube Downloader" -Direction Inbound -LocalPort 5001 -Protocol TCP -Action Allow
+New-NetFirewallRule -DisplayName "Media Downloader" -Direction Inbound -LocalPort 5001 -Protocol TCP -Action Allow
 ```
 
 ### Common LAN gotchas
@@ -309,7 +358,7 @@ Common alternative ports: `5002`, `8000`, `8080`.
 
 ### Change concurrency limit
 
-Downloads are throttled to avoid YouTube CDN timeouts. Edit `app.py`:
+Downloads are throttled to avoid CDN timeouts. Edit `app.py`:
 
 ```python
 DOWNLOAD_SEMAPHORE = threading.Semaphore(2)   # change 2 to N
@@ -332,20 +381,23 @@ DEFAULT_DOWNLOAD_DIR = BASE_DIR / "downloads"   # change to any path
 | **Port already in use / socket error** | Change port (`5001` → `5002`) |
 | **`ffmpeg is not installed`** | Install FFmpeg and restart terminal |
 | **`No supported JavaScript runtime`** | Install Deno and restart terminal |
-| **`Please sign in` / `Precondition check failed`** | Update yt-dlp: `pip install -U yt-dlp` |
+| **`Please sign in` / `Precondition check failed`** | Update yt-dlp: `pip install -U --pre yt-dlp` |
 | **`Connection to googlevideo.com timed out`** | Auto-retries 10×; if persistent, disable VPN or antivirus HTTPS scanning |
 | **Phone can't reach the app** | Windows Firewall — see [LAN section](#-access-from-your-phone-lan) |
 | **Audio sounds same at all bitrates** | YouTube's source is often only 128–256 kbps; higher output preserves that better but can't add detail |
+| **TikTok: `no impersonate target is available`** | `pip install -U --pre "yt-dlp[default,curl-cffi]"` then restart the app |
+| **TikTok: `Unexpected response from webpage request`** | Update yt-dlp nightly: `pip install -U --pre yt-dlp` |
+| **TikTok: watermark still present with toggle ON** | Best-effort — retry later, or try a different video |
+| **Facebook: video won't download** | Add cookies (see below) |
 | **Playlist says "Could not read playlist"** | Private/age-restricted playlist → add cookies (below) |
 | **Playlist downloads only some videos** | Some videos may be region-locked or deleted; the rest still succeed |
-| **`Unable to download API page`** | Update yt-dlp: `pip install -U yt-dlp` |
 
 ### Keep yt-dlp updated
 
-YouTube changes its API often. Keep yt-dlp fresh:
+YouTube, TikTok, and Facebook change their APIs often. Keep yt-dlp fresh:
 
 ```bash
-pip install -U yt-dlp
+pip install -U --pre yt-dlp
 ```
 
 The `requirements.txt` intentionally does **not** pin yt-dlp — this ensures `pip install -r requirements.txt` always grabs a working version.
@@ -365,7 +417,7 @@ In `app.py`, add to `common_opts` inside `download_worker`:
 **Option B — exported cookie file:**
 
 1. Install a "Get cookies.txt LOCALLY" browser extension
-2. Log in to YouTube, export cookies to `cookies.txt` in the project root
+2. Log in to the target platform, export cookies to `cookies.txt` in the project root
 3. Add to `common_opts`:
 
 ```python
@@ -384,6 +436,7 @@ You'll also want to add the same cookie option to the **playlist extraction** bl
 - **[yt-dlp](https://github.com/yt-dlp/yt-dlp)** — the actual download engine
 - **[FFmpeg](https://ffmpeg.org/)** — audio extraction, A/V merging, metadata embedding
 - **[Deno](https://deno.land/)** — JavaScript runtime for YouTube challenge solving
+- **[curl_cffi](https://github.com/lexiforest/curl_cffi)** — browser impersonation for TikTok/Facebook
 - **Vanilla JS + CSS** — no build step, no frontend dependencies
 
 ---
@@ -392,7 +445,10 @@ You'll also want to add the same cookie option to the **playlist extraction** bl
 
 This project is intended for **personal and educational use only**.
 
-- Downloading copyrighted content without permission may violate YouTube's [Terms of Service](https://www.youtube.com/t/terms) and copyright law in your country.
+- Downloading copyrighted content without permission may violate each platform's Terms of Service and copyright law in your country:
+  - [YouTube ToS](https://www.youtube.com/t/terms)
+  - [TikTok ToS](https://www.tiktok.com/legal/terms-of-service)
+  - [Facebook ToS](https://www.facebook.com/legal/terms)
 - Use this tool only for:
   - Content you own
   - Content in the public domain
@@ -410,7 +466,16 @@ This project is intended for **personal and educational use only**.
 No. Spotify streams are DRM-protected and their ToS forbids downloading. Any tool claiming otherwise either downloads from YouTube and mislabels it, or circumvents DRM (illegal in most countries).
 
 **Q: What's the highest MP3 quality I can get?**
-The app outputs up to **320 kbps MP3**, matching Spotify Premium's "Very High" tier. However, YouTube's source is typically 128–256 kbps AAC, so the effective ceiling is bounded by the source.
+The app outputs up to **320 kbps MP3**, matching Spotify Premium's "Very High" tier. However, the source's actual bitrate (usually 128–256 kbps for YouTube, similar for TikTok) is the true ceiling — transcoding can't add detail.
+
+**Q: Can I download TikTok without a watermark?**
+Yes — the toggle in the Single tab is on by default. It's best-effort: TikTok sometimes serves watermarked streams anyway. If that happens, retry or update yt-dlp.
+
+**Q: Can I download Facebook videos?**
+Yes — public videos, reels, and `fb.watch` short links work out of the box. Private and friends-only videos need cookies.
+
+**Q: Can I bulk-download TikTok or Facebook?**
+Not currently — those platforms live in the Single tab only. Bulk and Playlist are YouTube-only. PRs welcome!
 
 **Q: Will this work on a public server?**
 Yes, but the **server-folder save options** let users write to arbitrary paths. Before exposing publicly, either:
@@ -425,9 +490,6 @@ Port 5000 is often reserved by Windows (Hyper-V/WSL2) or macOS (AirPlay Receiver
 **Q: Can I change the output filename?**
 Not from the UI yet. yt-dlp names files with an internal job ID; the friendly name is applied when you click **Save**. PRs welcome!
 
-**Q: Does it work with YouTube playlists?**
-Yes — the **Playlist** tab handles both `youtube.com/playlist?list=...` and watch URLs with `&list=...`. You can also cap how many videos to grab.
-
 **Q: How many links can I paste in Bulk?**
 No hard limit, but the queue downloads 2 at a time. Pasting 100+ links works but will take a while.
 
@@ -437,8 +499,8 @@ No. Files stay in `downloads/` on the server. Add a cleanup task (e.g., cron job
 **Q: Can I use this on Windows, macOS, and Linux?**
 Yes — the only platform-specific bits are the FFmpeg/Deno install steps, which the docs cover for all three.
 
-**Q: How do I add a "Save All" for my playlist downloads?**
-The Playlist tab already has **💾 Save All** — it works exactly like the Bulk tab's version.
+**Q: Why does TikTok ask for browser impersonation?**
+TikTok's anti-bot protection requires a real browser's TLS fingerprint. `curl_cffi` provides this. Install it with `pip install -U --pre "yt-dlp[default,curl-cffi]"`.
 
 ---
 
@@ -452,10 +514,14 @@ Contributions, issues, and feature requests are welcome!
 4. Push: `git push origin feature/amazing-feature`
 5. Open a Pull Request
 
-Please test with a **public-domain** YouTube video before submitting.
+Please test with a **public-domain** or **your own** video before submitting.
 
 ### Ideas for contributions
 - ✅ ~~Playlist support~~ (done!)
+- ✅ ~~TikTok support with watermark removal~~ (done!)
+- ✅ ~~Facebook support~~ (done!)
+- Bulk mode for TikTok / Facebook
+- Instagram / Twitter (X) support
 - Drag-and-drop URL paste
 - Progress persistence (resume jobs after server restart)
 - Auto-cleanup of old downloads
@@ -504,6 +570,7 @@ SOFTWARE.
 - [yt-dlp](https://github.com/yt-dlp/yt-dlp) — the engine that makes this possible
 - [FFmpeg](https://ffmpeg.org/) — audio/video processing
 - [Deno](https://deno.land/) — modern JS runtime
+- [curl_cffi](https://github.com/lexiforest/curl_cffi) — browser impersonation
 - [Flask](https://flask.palletsprojects.com/) — simple, powerful web framework
 - All contributors and users of this project
 

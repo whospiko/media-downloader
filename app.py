@@ -25,7 +25,6 @@ YT_REGEX = re.compile(
     r"[\w\-]+"
 )
 
-# NEW: Playlist URLs look like youtube.com/playlist?list=XXXX
 PLAYLIST_REGEX = re.compile(
     r"^(https?://)?(www\.)?"
     r"(youtube\.com/playlist\?list=|"
@@ -34,8 +33,22 @@ PLAYLIST_REGEX = re.compile(
     r"[\w\-]+"
 )
 
-# Valid audio quality targets (kbps)
+# TikTok URL patterns
+TIKTOK_REGEX = re.compile(
+    r"^(https?://)?(www\.|m\.)?"
+    r"(tiktok\.com/(@[\w.\-]+/video/\d+|t/\w+|vm\.tiktok\.com/\w+)|"
+    r"vt\.tiktok\.com/\w+)"
+)
+
+# Facebook URL patterns — covers videos, watch pages, reels, share links
+FACEBOOK_REGEX = re.compile(
+    r"^(https?://)?(www\.|m\.|web\.|mbasic\.)?"
+    r"(facebook\.com/|fb\.watch/|fb\.me/)"
+    r".*"
+)
+
 VALID_QUALITIES = {"128", "192", "256", "320"}
+VALID_PLATFORMS = {"youtube", "tiktok", "facebook"}
 
 
 def is_valid_youtube_url(url: str) -> bool:
@@ -43,11 +56,28 @@ def is_valid_youtube_url(url: str) -> bool:
 
 
 def is_valid_playlist_url(url: str) -> bool:
-    """Accept both /playlist?list= and watch URLs that contain &list=."""
     if not url:
         return False
     u = url.strip()
     return bool(PLAYLIST_REGEX.match(u)) or ("list=" in u and "youtube.com" in u)
+
+
+def is_valid_tiktok_url(url: str) -> bool:
+    return bool(url and TIKTOK_REGEX.match(url.strip()))
+
+
+def is_valid_facebook_url(url: str) -> bool:
+    """Facebook has many URL shapes; accept broad facebook.com / fb.watch patterns."""
+    if not url:
+        return False
+    u = url.strip()
+    if not FACEBOOK_REGEX.match(u):
+        return False
+    # Must contain something that looks like a video / reel / watch / share path
+    return any(k in u for k in (
+        "/video", "/videos", "/watch", "/reel", "/reels",
+        "fb.watch/", "fb.me/", "/share/", "/story",
+    ))
 
 
 def resolve_output_dir(user_path: str | None) -> Path:
@@ -90,68 +120,119 @@ def progress_hook(job_id):
     return hook
 
 
+def build_ydl_opts(job_id, fmt, quality, output_dir, platform, remove_watermark):
+    """
+    Build the yt-dlp options dict. Shared by all platforms.
+    Returns (ydl_opts, expected_extension).
+    """
+    out_template = str(output_dir / f"{job_id}.%(ext)s")
+
+    common_opts = {
+        "outtmpl": out_template,
+        "progress_hooks": [progress_hook(job_id)],
+        "quiet": True,
+        "noplaylist": True,
+
+        "retries": 10,
+        "fragment_retries": 10,
+        "file_access_retries": 5,
+        "extractor_retries": 5,
+        "socket_timeout": 30,
+        "http_chunk_size": 1048576,
+        "source_address": "0.0.0.0",
+        "retry_sleep_functions": {
+            "http": lambda n: min(2 ** n, 30),
+            "fragment": lambda n: min(2 ** n, 30),
+        },
+        "continuedl": True,
+        "skip_unavailable_fragments": True,
+        "geo_bypass": True,
+        "ignoreerrors": False,
+    }
+
+    if fmt == "mp3":
+        return {
+            **common_opts,
+            "format": "bestaudio/best",
+            "postprocessors": [
+                {
+                    "key": "FFmpegExtractAudio",
+                    "preferredcodec": "mp3",
+                    "preferredquality": quality,
+                },
+                {"key": "FFmpegMetadata", "add_metadata": True},
+                {"key": "EmbedThumbnail", "already_have_thumbnail": False},
+            ],
+            "writethumbnail": True,
+            "format_sort": ["abr", "asr", "channels"],
+        }, "mp3"
+
+    # TikTok MP4 (single-file, no merge needed)
+    if platform == "tiktok":
+        return {
+            **common_opts,
+            "format": "best[ext=mp4]/best",
+            "merge_output_format": "mp4",
+        }, "mp4"
+
+    # Facebook MP4 (usually single progressive mp4, sometimes HLS)
+    if platform == "facebook":
+        return {
+            **common_opts,
+            "format": "best[ext=mp4]/best",
+            "merge_output_format": "mp4",
+        }, "mp4"
+
+    # YouTube MP4 (existing logic)
+    return {
+        **common_opts,
+        "format": "bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best",
+        "merge_output_format": "mp4",
+    }, "mp4"
+
+
 def download_worker(job_id: str, url: str, fmt: str, output_dir: Path,
-                    quality: str = "320"):
+                    quality: str = "320",
+                    platform: str = "youtube",
+                    remove_watermark: bool = False):
     with DOWNLOAD_SEMAPHORE:
         try:
-            out_template = str(output_dir / f"{job_id}.%(ext)s")
+            ydl_opts, extension = build_ydl_opts(
+                job_id, fmt, quality, output_dir, platform, remove_watermark
+            )
 
-            common_opts = {
-                "outtmpl": out_template,
-                "progress_hooks": [progress_hook(job_id)],
-                "quiet": True,
-                "noplaylist": True,
-
-                "retries": 10,
-                "fragment_retries": 10,
-                "file_access_retries": 5,
-                "extractor_retries": 5,
-                "socket_timeout": 30,
-                "http_chunk_size": 1048576,
-                "source_address": "0.0.0.0",
-                "retry_sleep_functions": {
-                    "http": lambda n: min(2 ** n, 30),
-                    "fragment": lambda n: min(2 ** n, 30),
-                },
-                "continuedl": True,
-                "skip_unavailable_fragments": True,
-                "geo_bypass": True,
-                "ignoreerrors": False,
-            }
-
-            if fmt == "mp3":
-                ydl_opts = {
-                    **common_opts,
-                    "format": "bestaudio/best",
-                    "postprocessors": [
-                        {
-                            "key": "FFmpegExtractAudio",
-                            "preferredcodec": "mp3",
-                            "preferredquality": quality,
-                        },
-                        {"key": "FFmpegMetadata", "add_metadata": True},
-                        {"key": "EmbedThumbnail", "already_have_thumbnail": False},
-                    ],
-                    "writethumbnail": True,
-                    "format_sort": ["abr", "asr", "channels"],
+            # TikTok extractor options
+            if platform == "tiktok":
+                ydl_opts["extractor_args"] = {
+                    "tiktok": {
+                        # Force the mobile API hostname so the no-watermark
+                        # URL is returned (when available).
+                        "api_hostname": ["api22-normal-c-useast2a.tiktokv.com"],
+                    }
                 }
-            else:
-                ydl_opts = {
-                    **common_opts,
-                    "format": "bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best",
-                    "merge_output_format": "mp4",
-                }
+
+            # Facebook extractor options
+            if platform == "facebook":
+                # Try to grab the highest quality. Facebook often needs
+                # a modern User-Agent — yt-dlp's extractor handles this.
+                ydl_opts.setdefault("extractor_args", {})
+                ydl_opts["extractor_args"].setdefault("facebook", {})
 
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                 info = ydl.extract_info(url, download=True)
-                title = info.get("title", "video")
-                uploader = info.get("uploader", "")
+                title = info.get("title", "video") or info.get("id", "video")
+                uploader = info.get("uploader") or info.get("creator") or ""
 
-            extension = "mp3" if fmt == "mp3" else "mp4"
             file_path = output_dir / f"{job_id}.{extension}"
 
             if not file_path.exists():
-                raise FileNotFoundError("Output file was not created.")
+                # Fallback: scan for any file matching the job id
+                matches = list(output_dir.glob(f"{job_id}.*"))
+                if matches:
+                    file_path = matches[0]
+                    extension = file_path.suffix.lstrip(".")
+                else:
+                    raise FileNotFoundError("Output file was not created.")
 
             JOBS[job_id].update(
                 status="done",
@@ -183,9 +264,24 @@ def start_download():
     fmt = (data.get("format") or "mp4").lower()
     quality = str(data.get("quality") or "320")
     server_dir = (data.get("server_dir") or "").strip()
+    platform = (data.get("platform") or "youtube").lower()
+    remove_watermark = bool(data.get("remove_watermark"))
 
-    if not is_valid_youtube_url(url):
-        return jsonify({"error": "Invalid YouTube URL."}), 400
+    # Validate platform
+    if platform not in VALID_PLATFORMS:
+        return jsonify({"error": "Platform must be 'youtube', 'tiktok', or 'facebook'."}), 400
+
+    # Validate URL by platform
+    if platform == "youtube":
+        if not is_valid_youtube_url(url):
+            return jsonify({"error": "Invalid YouTube URL."}), 400
+    elif platform == "tiktok":
+        if not is_valid_tiktok_url(url):
+            return jsonify({"error": "Invalid TikTok URL."}), 400
+    else:  # facebook
+        if not is_valid_facebook_url(url):
+            return jsonify({"error": "Invalid Facebook video URL."}), 400
+
     if fmt not in ("mp3", "mp4"):
         return jsonify({"error": "Format must be mp3 or mp4."}), 400
     if quality not in VALID_QUALITIES:
@@ -202,18 +298,19 @@ def start_download():
         "percent": 0,
         "saved_to": str(output_dir),
         "url": url,
+        "platform": platform,
     }
 
     threading.Thread(
         target=download_worker,
-        args=(job_id, url, fmt, output_dir, quality),
+        args=(job_id, url, fmt, output_dir, quality, platform, remove_watermark),
         daemon=True,
     ).start()
 
-    return jsonify({"job_id": job_id, "saved_to": str(output_dir)})
+    return jsonify({"job_id": job_id, "saved_to": str(output_dir), "platform": platform})
 
 
-# ============ BULK DOWNLOAD ============
+# ============ BULK DOWNLOAD (YouTube only) ============
 @app.route("/api/bulk-download", methods=["POST"])
 def start_bulk_download():
     data = request.get_json(silent=True) or {}
@@ -270,11 +367,12 @@ def start_bulk_download():
             "url": url,
             "title": None,
             "error": None,
+            "platform": "youtube",
         }
         job_ids.append(jid)
         threading.Thread(
             target=download_worker,
-            args=(jid, url, fmt, output_dir, quality),
+            args=(jid, url, fmt, output_dir, quality, "youtube", False),
             daemon=True,
         ).start()
 
@@ -294,7 +392,7 @@ def start_bulk_download():
     })
 
 
-# ============ PLAYLIST DOWNLOAD (NEW) ============
+# ============ PLAYLIST DOWNLOAD (YouTube only) ============
 @app.route("/api/playlist-download", methods=["POST"])
 def start_playlist_download():
     data = request.get_json(silent=True) or {}
@@ -302,7 +400,7 @@ def start_playlist_download():
     fmt = (data.get("format") or "mp4").lower()
     quality = str(data.get("quality") or "320")
     server_dir = (data.get("server_dir") or "").strip()
-    max_items = data.get("max_items")  # optional cap
+    max_items = data.get("max_items")
 
     if not is_valid_playlist_url(url):
         return jsonify({"error": "Invalid YouTube playlist URL."}), 400
@@ -316,15 +414,14 @@ def start_playlist_download():
     except ValueError as e:
         return jsonify({"error": str(e)}), 400
 
-    # ---- Expand the playlist into individual video URLs (no download yet) ----
     extract_opts = {
         "quiet": True,
-        "extract_flat": "in_playlist",   # fast — don't resolve each video
+        "extract_flat": "in_playlist",
         "skip_download": True,
         "ignoreerrors": True,
         "socket_timeout": 30,
         "retries": 5,
-        "noplaylist": False,             # ← IMPORTANT: we WANT the playlist
+        "noplaylist": False,
     }
 
     try:
@@ -339,7 +436,6 @@ def start_playlist_download():
     entries = info.get("entries") or []
     playlist_title = info.get("title") or "Playlist"
 
-    # Optional cap
     if max_items:
         try:
             max_items = int(max_items)
@@ -350,7 +446,6 @@ def start_playlist_download():
     if not entries:
         return jsonify({"error": "Playlist is empty."}), 400
 
-    # Build clean list of {url, title}
     video_items = []
     for e in entries:
         if not e:
@@ -366,7 +461,6 @@ def start_playlist_download():
     if not video_items:
         return jsonify({"error": "No usable videos found in playlist."}), 400
 
-    # ---- Queue a job for each video ----
     bulk_id = uuid.uuid4().hex
     job_ids = []
     for item in video_items:
@@ -376,13 +470,14 @@ def start_playlist_download():
             "percent": 0,
             "saved_to": str(output_dir),
             "url": item["url"],
-            "title": item["title"],   # pre-fill title from playlist metadata
+            "title": item["title"],
             "error": None,
+            "platform": "youtube",
         }
         job_ids.append(jid)
         threading.Thread(
             target=download_worker,
-            args=(jid, item["url"], fmt, output_dir, quality),
+            args=(jid, item["url"], fmt, output_dir, quality, "youtube", False),
             daemon=True,
         ).start()
 
