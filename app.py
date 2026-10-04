@@ -3,6 +3,8 @@ import re
 import uuid
 import threading
 from pathlib import Path
+import imageio_ffmpeg
+FFMPEG_PATH = imageio_ffmpeg.get_ffmpeg_exe()
 
 from flask import Flask, render_template, request, jsonify, send_file, abort
 import yt_dlp
@@ -577,4 +579,5 @@ def get_file(job_id):
 
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5001, debug=True)
+    port = int(os.environ.get("PORT", 5001))
+    app.run(host="0.0.0.0", port=port, debug=False)
